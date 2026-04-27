@@ -7,6 +7,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerGetUserTool } from "@/mcp/tools/get_user/main.js";
 import { registerGetProductTool } from "@/mcp/tools/get_product/main.js";
 import { registerGetOrderTool } from "@/mcp/tools/get_order/main.js";
+import { registerDiagnosizePageSizeIssueTool } from "@/mcp/tools/diagnose_pagesize_issue/main.js";
+import { registerDiagnosizeFontIssueTool } from "@/mcp/tools/diagnose_font_issue/main.js";
+import { registerDiagnosizeScrollIssueTool } from "@/mcp/tools/diagnose_scroll_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -17,6 +20,9 @@ function registerTools(server: McpServer): void {
   registerGetUserTool(server);
   registerGetProductTool(server);
   registerGetOrderTool(server);
+  registerDiagnosizePageSizeIssueTool(server);
+  registerDiagnosizeFontIssueTool(server);
+  registerDiagnosizeScrollIssueTool(server);
 }
 
 /**************************************************************************
