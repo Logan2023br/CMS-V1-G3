@@ -47,6 +47,8 @@ app.post("/mcp", (req, res) => {
   });
 
   mcpLogger("in", req.body);
+  // Temporary debug: discover whether Crisp passes session/conversation info via headers
+  console.log("→ MCP Headers", JSON.stringify(req.headers, null, 2));
 
   server
     .connect(transport)

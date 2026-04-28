@@ -38,6 +38,13 @@ const ESCALATE_SCROLL_INPUT_SHAPE = z.object({
     .describe(
       "Optional — only include if you actually have the live Crisp conversation URL from your runtime context. Do NOT fabricate one and do NOT paste any placeholder. If you don't have it, leave this field out entirely."
     ),
+
+  crisp_session_id: z
+    .string()
+    .optional()
+    .describe(
+      "The Crisp conversation session ID for this chat (looks like 'session_xxxxxxxx-xxxx-xxxx-...'). If you have it from your runtime context, include it — the tool will then POST the private note directly to this Crisp conversation via Crisp's REST API. If you do not have it, leave the field out and the tool will still return the note text but will NOT post it automatically."
+    ),
 });
 
 type EscalateScrollInput = z.infer<typeof ESCALATE_SCROLL_INPUT_SHAPE>;
@@ -84,6 +91,19 @@ const ESCALATE_SCROLL_OUTPUT_SHAPE = z.object({
     .string()
     .describe(
       "Exact sentence Hugo should say to the user next — either a request for missing info, or the wait-for-technical-team message."
+    ),
+
+  note_posted: z
+    .boolean()
+    .describe(
+      "True if the tool successfully POSTed the private note to Crisp via REST API. False otherwise (no session ID provided, missing credentials, or API error)."
+    ),
+
+  note_post_error: z
+    .string()
+    .optional()
+    .describe(
+      "Error message if the Crisp note posting failed or was skipped. Useful for Hugo and the developer to diagnose."
     ),
 });
 

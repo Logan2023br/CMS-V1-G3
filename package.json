@@ -1,5 +1,5 @@
 {
-  "name": "crisp-mcp-demo",
+  "name": "crisp-mcp-server-v1",
   "version": "1.0.0",
   "description": "Example of MCP integration with Hugo AI",
   "license": "ISC",
@@ -10,8 +10,8 @@
     "lint": "eslint 'src/**/*.{ts,js}'",
     "inspect": "npx @modelcontextprotocol/inspector",
     "build": "tsc --build tsconfig.json && tsc-alias -p tsconfig.json",
-    "start": "node dist/src/server.js",
-    "dev": "tsx watch src/server.ts",
+    "start": "node --env-file=.env dist/src/server.js",
+    "dev": "tsx watch --env-file=.env src/server.ts",
     "tunnel": "cloudflared tunnel --url http://localhost:${PORT:-3000}"
   },
   "devDependencies": {

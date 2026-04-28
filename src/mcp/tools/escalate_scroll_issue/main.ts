@@ -50,6 +50,8 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
 
         - ticket_url (optional) — Only include if your runtime actually exposes the live Crisp conversation URL to you. If you do NOT have it, omit this field entirely. NEVER pass a placeholder, format string, or fabricated URL.
 
+        - crisp_session_id (optional but STRONGLY recommended) — The Crisp session ID for THIS conversation (looks like "session_xxxxxxxx-xxxx-xxxx-..."). If you have access to it from your runtime context, include it — the tool will then automatically POST the private note to this Crisp conversation via the Crisp REST API, and you do not need to do anything else. If you do not have it, omit it; the tool will still return the note text but will NOT post it.
+
         ===========================================================
         WHAT YOU MUST DO
         ===========================================================
@@ -64,10 +66,10 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
         Ask for the missing one. Do not call the tool yet.
 
         STEP 4 — User has provided BOTH a screenshot URL AND an editor link.
-        a) Call escalate_scroll_issue with: issue_description, editor_link, screenshot_url. Include ticket_url only if you actually have it.
-        b) Read crisp_note.content from the response. It is a 3-line plain-text block.
-        c) POST that exact content as a PRIVATE NOTE on this Crisp conversation. Use your Crisp "send a private note" action. THIS STEP IS MANDATORY — do not just say "I forwarded it"; you must actually post the note. Without the note, the technical team sees nothing.
-        d) Reply to the user with next_step_for_user verbatim ("Vui lòng chờ vài phút..."). Do not paraphrase it.
+        a) Call escalate_scroll_issue with: issue_description, editor_link, screenshot_url. Include ticket_url and crisp_session_id if you have them.
+        b) Inspect the response:
+           - If note_posted === true → the tool already posted the private note for you. You only need to reply to the user with next_step_for_user verbatim. Do NOT also try to post the note yourself; that would create a duplicate.
+           - If note_posted === false → the tool could not post the note (no session ID or API failure). Reply to the user with next_step_for_user anyway, then if you have a way to post a private note natively, post crisp_note.content. The note_post_error field explains why posting failed.
 
         ===========================================================
         ACCEPTING SCREENSHOTS — DO NOT REJECT
@@ -82,7 +84,8 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
         ===========================================================
 
         - is_ready_for_escalation === false → Do NOT post any note. Ask the user for what is listed in missing_info, using next_step_for_user as your reply.
-        - is_ready_for_escalation === true → POST crisp_note.content as a private note (mandatory), THEN reply to the user with next_step_for_user.
+        - is_ready_for_escalation === true AND note_posted === true → The tool already posted the private note. Just reply to the user with next_step_for_user verbatim. Do not duplicate the note.
+        - is_ready_for_escalation === true AND note_posted === false → Reply with next_step_for_user. If you have native ability to post a Crisp private note, post crisp_note.content. note_post_error explains why the tool could not post.
 
         ===========================================================
         EXACT NOTE FORMAT (do not change, do not add headers, do not add cc tags)
@@ -96,7 +99,7 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
       outputSchema: ESCALATE_SCROLL_OUTPUT_SHAPE,
     },
     async (input: EscalateScrollInput) => {
-      const output: EscalateScrollOutput = escalateScrollIssueHandler(input);
+      const output: EscalateScrollOutput = await escalateScrollIssueHandler(input);
 
       return {
         content: [
