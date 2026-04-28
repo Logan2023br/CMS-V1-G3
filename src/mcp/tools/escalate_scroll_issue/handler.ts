@@ -114,34 +114,25 @@ async function postCrispPrivateNote(
   }
 }
 
-// Best-effort fallback when Hugo does not pass crisp_session_id. Crisp
-// does not currently expose the active session ID to MCP plugins, so we
-// have to infer it. Strategy:
-//   1) List recent conversations in the workspace.
-//   2) Prefer the one whose last_message.content contains the URL Hugo
-//      is escalating (screenshot_url or editor_link) — this is the
-//      conversation where the visitor just pasted that URL.
-//   3) Otherwise fall back to the most-recently-active conversation
-//      whose last_message.from === "user".
-//   4) Otherwise fall back to the single most-recent conversation.
-// Any fallback past (2) is race-prone if multiple visitors are chatting
-// at once and is surfaced as a warning.
+// Crisp's conversation list API returns last_message as a plain string
+// (the text of the last message — no metadata). It also exposes
+// waiting_since: the timestamp at which the visitor sent a message that
+// is still waiting for an operator reply. This is the strongest signal
+// available about which conversation Hugo is currently responding to.
+//
+// Resolver priority when Hugo does not pass crisp_session_id:
+//   1) Find a conversation whose last_message text contains one of the
+//      URLs the user just pasted (screenshot_url or editor_link). This
+//      is deterministic when the user's URL is in the latest message.
+//   2) Otherwise pick the conversation with the most recent
+//      waiting_since — the visitor whose message is freshest and not
+//      yet replied to by an operator.
+//   3) Otherwise fall back to the most-recently-updated conversation.
 interface ConversationLite {
   session_id?: string;
-  last_message?: {
-    timestamp?: number;
-    from?: string; // "user" | "operator" | ...
-    content?: string | { text?: string; url?: string };
-  };
-}
-
-function lastMessageText(c: ConversationLite): string {
-  const content = c.last_message?.content;
-  if (typeof content === "string") return content;
-  if (content && typeof content === "object") {
-    return [content.text, content.url].filter(Boolean).join(" ");
-  }
-  return "";
+  updated_at?: number;
+  waiting_since?: number | null;
+  last_message?: string;
 }
 
 async function findLatestActiveSession(
@@ -170,14 +161,9 @@ async function findLatestActiveSession(
       return { sessionId: null, error: "No conversations returned by Crisp." };
     }
 
-    const byRecency = [...items].sort(
-      (a, b) => (b.last_message?.timestamp ?? 0) - (a.last_message?.timestamp ?? 0)
-    );
-
-    // (1) Prefer a conversation whose last_message text contains the
-    //     screenshot URL or editor link the user just pasted.
-    for (const conv of byRecency) {
-      const text = lastMessageText(conv);
+    // (1) Match by URL appearing in last_message text.
+    for (const conv of items) {
+      const text = conv.last_message ?? "";
       if (!text) continue;
       const hit = matchTokens.find((t) => t && text.includes(t));
       if (hit && conv.session_id) {
@@ -185,28 +171,33 @@ async function findLatestActiveSession(
       }
     }
 
-    // (2) Otherwise prefer the most recent conversation whose last
-    //     message is from the visitor.
-    const userLast = byRecency.find((c) => c.last_message?.from === "user");
-    if (userLast?.session_id) {
+    // (2) Sort by waiting_since DESC (most recently-waiting visitor first).
+    const waiting = items.filter(
+      (c) => typeof c.waiting_since === "number" && c.waiting_since > 0
+    );
+    waiting.sort((a, b) => (b.waiting_since ?? 0) - (a.waiting_since ?? 0));
+    if (waiting[0]?.session_id) {
       return {
-        sessionId: userLast.session_id,
-        matchedBy: "user-last-message",
+        sessionId: waiting[0].session_id,
+        matchedBy: "waiting-since",
         error:
-          "Warning: could not match a conversation by URL content; using most recent visitor-message conversation. This may be the wrong ticket if multiple visitors are active.",
+          "Warning: matched by waiting_since rather than URL content. May be wrong if another visitor is also waiting.",
       };
     }
 
-    // (3) Fallback: most-recent conversation overall.
+    // (3) Last resort: most-recently-updated conversation.
+    const byRecency = [...items].sort(
+      (a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0)
+    );
     const top = byRecency[0];
-    if (!top.session_id) {
+    if (!top?.session_id) {
       return { sessionId: null, error: "Top conversation has no session_id field." };
     }
     return {
       sessionId: top.session_id,
-      matchedBy: "most-recent",
+      matchedBy: "most-recent-updated",
       error:
-        "Warning: no conversation had last_message.from === 'user' or matched any URL. Picked most-recently-active conversation as a last resort.",
+        "Warning: no URL match and no waiting visitor; picked most-recently-updated conversation as last resort.",
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
