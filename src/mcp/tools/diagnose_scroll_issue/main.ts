@@ -45,9 +45,17 @@ function registerDiagnosizeScrollIssueTool(server: McpServer): void {
             "Scroll bị stuck giữa chừng"
         - editor_link (required) — PageFly editor URL the user provided.
         - ticket_url (required) — The Crisp conversation URL — you ALREADY have this from the conversation context. Use it.
-        - screenshot_url (required for escalation) — The public URL of the screenshot the user uploaded. Crisp exposes a URL for every customer attachment; pull it from the message.
+        - screenshot_url (required for escalation) — ANY URL the user gave you that points to a picture of the scroll issue. ACCEPT IT AS-IS, regardless of host or format. All of these count and MUST be accepted:
+            • Pasted link: prnt.sc/abc, i.imgur.com/xyz.png, drive.google.com/..., screenshot.net, lightshot, etc.
+            • Direct Crisp upload: when the user attaches an image file in this conversation, Crisp gives the file a URL — use that URL.
+          DO NOT try to "view", "recognize", "OCR", or validate the image yourself. DO NOT refuse a screenshot because the host is unfamiliar or because you can't render it inline. The technical team will open the URL in a browser. Your only job is to take the URL the user provided and pass it through.
 
         Before calling, you MUST have BOTH a screenshot URL AND an editor link from the user. If either is missing, ASK FIRST. Do not call the tool with placeholder values.
+
+        IMPORTANT — accepting screenshots:
+        • If the user pastes an image link of any kind, that IS the screenshot. Use it. Do NOT ask them to "upload directly" or "send PNG/JPG instead".
+        • If the user uploads an image file directly in this Crisp conversation, Crisp provides the file's URL — pull it from the attachment metadata and use it. Do NOT say "system can't recognize the image format". You don't need to recognize anything; you need a URL.
+        • If you have ANY URL pointing to the screenshot, you have what you need. Move on to call the tool.
 
         ===========================================================
         WHAT YOU MUST DO (in order, no skipping)

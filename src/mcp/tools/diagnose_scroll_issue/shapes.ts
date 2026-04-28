@@ -35,7 +35,7 @@ const DIAGNOSE_SCROLL_INPUT_SHAPE = z.object({
     .url()
     .optional()
     .describe(
-      "URL of the screenshot the user uploaded in the conversation (Crisp exposes a public URL for every customer attachment). Required for escalation — tool will refuse to escalate without it."
+      "ANY URL the user provided that points to a screenshot of the issue. Accept it as-is. Examples that ALL count: prnt.sc/abc, i.imgur.com/xyz.png, drive.google.com/..., or the Crisp attachment URL when the user uploaded a file directly in this conversation. Do NOT try to verify, OCR, or 'see' the image yourself — just pass the URL through. The technical team opens the URL and looks at the picture. Required for escalation."
     ),
 });
 
