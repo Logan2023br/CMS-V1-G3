@@ -114,24 +114,40 @@ async function postCrispPrivateNote(
   }
 }
 
-// Race-prone fallback: when Hugo does not pass crisp_session_id, infer it
-// by looking at recent conversations in this workspace. We narrow to the
-// conversation whose LAST message is from a visitor (not an operator) —
-// because at the moment Hugo calls this tool, the conversation it is
-// replying to has the user's message as its most recent entry. This still
-// fails if multiple visitors message at the same instant; in production
-// we expect Crisp to expose the session ID via the MCP request context.
+// Best-effort fallback when Hugo does not pass crisp_session_id. Crisp
+// does not currently expose the active session ID to MCP plugins, so we
+// have to infer it. Strategy:
+//   1) List recent conversations in the workspace.
+//   2) Prefer the one whose last_message.content contains the URL Hugo
+//      is escalating (screenshot_url or editor_link) — this is the
+//      conversation where the visitor just pasted that URL.
+//   3) Otherwise fall back to the most-recently-active conversation
+//      whose last_message.from === "user".
+//   4) Otherwise fall back to the single most-recent conversation.
+// Any fallback past (2) is race-prone if multiple visitors are chatting
+// at once and is surfaced as a warning.
 interface ConversationLite {
   session_id?: string;
   last_message?: {
     timestamp?: number;
     from?: string; // "user" | "operator" | ...
+    content?: string | { text?: string; url?: string };
   };
 }
 
+function lastMessageText(c: ConversationLite): string {
+  const content = c.last_message?.content;
+  if (typeof content === "string") return content;
+  if (content && typeof content === "object") {
+    return [content.text, content.url].filter(Boolean).join(" ");
+  }
+  return "";
+}
+
 async function findLatestActiveSession(
-  creds: CrispCreds
-): Promise<{ sessionId: string | null; error?: string }> {
+  creds: CrispCreds,
+  matchTokens: string[]
+): Promise<{ sessionId: string | null; error?: string; matchedBy?: string }> {
   const url = `https://api.crisp.chat/v1/website/${creds.websiteId}/conversations/1`;
 
   try {
@@ -154,28 +170,44 @@ async function findLatestActiveSession(
       return { sessionId: null, error: "No conversations returned by Crisp." };
     }
 
-    // Sort all by recency.
     const byRecency = [...items].sort(
       (a, b) => (b.last_message?.timestamp ?? 0) - (a.last_message?.timestamp ?? 0)
     );
 
-    // Prefer conversations where the very last message is from the visitor —
-    // that's the one Hugo is currently replying to.
-    const userLast = byRecency.find((c) => c.last_message?.from === "user");
-    const chosen = userLast ?? byRecency[0];
-
-    const sessionId = chosen.session_id;
-    if (!sessionId) {
-      return { sessionId: null, error: "Top conversation has no session_id field." };
+    // (1) Prefer a conversation whose last_message text contains the
+    //     screenshot URL or editor link the user just pasted.
+    for (const conv of byRecency) {
+      const text = lastMessageText(conv);
+      if (!text) continue;
+      const hit = matchTokens.find((t) => t && text.includes(t));
+      if (hit && conv.session_id) {
+        return { sessionId: conv.session_id, matchedBy: `content:${hit}` };
+      }
     }
-    if (!userLast) {
+
+    // (2) Otherwise prefer the most recent conversation whose last
+    //     message is from the visitor.
+    const userLast = byRecency.find((c) => c.last_message?.from === "user");
+    if (userLast?.session_id) {
       return {
-        sessionId,
+        sessionId: userLast.session_id,
+        matchedBy: "user-last-message",
         error:
-          "Warning: no conversation had last_message.from === 'user'. Falling back to most-recently-active conversation; this may be the wrong one if multiple visitors are active.",
+          "Warning: could not match a conversation by URL content; using most recent visitor-message conversation. This may be the wrong ticket if multiple visitors are active.",
       };
     }
-    return { sessionId };
+
+    // (3) Fallback: most-recent conversation overall.
+    const top = byRecency[0];
+    if (!top.session_id) {
+      return { sessionId: null, error: "Top conversation has no session_id field." };
+    }
+    return {
+      sessionId: top.session_id,
+      matchedBy: "most-recent",
+      error:
+        "Warning: no conversation had last_message.from === 'user' or matched any URL. Picked most-recently-active conversation as a last resort.",
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { sessionId: null, error: `Network/exception: ${message}` };
@@ -184,7 +216,8 @@ async function findLatestActiveSession(
 
 async function tryPostNote(
   hintedSessionId: string | undefined,
-  content: string
+  content: string,
+  matchTokens: string[]
 ): Promise<PostNoteResult> {
   const creds = readCrispCreds();
   if (!creds) {
@@ -213,10 +246,9 @@ async function tryPostNote(
     };
   }
 
-  // 2) Fallback: query Crisp for the most recently active conversation in
-  //    this workspace and post there. Race-prone if multiple visitors are
-  //    chatting at once — only safe for single-tester demos.
-  const lookup = await findLatestActiveSession(creds);
+  // 2) Auto-resolve: prefer the conversation whose last_message contains
+  //    the user's pasted URLs, with weaker fallbacks below.
+  const lookup = await findLatestActiveSession(creds, matchTokens);
   if (!lookup.sessionId) {
     return {
       posted: false,
@@ -230,11 +262,12 @@ async function tryPostNote(
       posted: true,
       sessionUsed: lookup.sessionId,
       sessionSource: "auto-latest",
+      error: lookup.error, // surface any matching warning even on success
     };
   }
   return {
     posted: false,
-    error: `Auto-resolved session ${lookup.sessionId} but posting failed: ${r.error}`,
+    error: `Auto-resolved session ${lookup.sessionId} (matched by ${lookup.matchedBy}) but posting failed: ${r.error}`,
     sessionUsed: lookup.sessionId,
     sessionSource: "auto-latest",
   };
@@ -287,7 +320,14 @@ async function escalateScrollIssueHandler(
     `Editor: ${input.editor_link}\n` +
     `Ticket: ${input.ticket_url ?? TICKET_URL_FALLBACK}`;
 
-  const noteResult: PostNoteResult = await tryPostNote(input.crisp_session_id, noteContent);
+  const matchTokens = [input.screenshot_url, input.editor_link].filter(
+    (s): s is string => typeof s === "string" && s.length > 0
+  );
+  const noteResult: PostNoteResult = await tryPostNote(
+    input.crisp_session_id,
+    noteContent,
+    matchTokens
+  );
   if (noteResult.posted) {
     console.log(
       `[escalate_scroll_issue] Posted Crisp note (session ${noteResult.sessionUsed}, source=${noteResult.sessionSource})`
