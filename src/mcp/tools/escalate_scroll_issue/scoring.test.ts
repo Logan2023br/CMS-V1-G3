@@ -119,3 +119,81 @@ test("scoreConversation: exact_text and substring_text both fire, total = 160", 
   assert.ok(result.signalsMatched.includes("substring_text"));
   assert.equal(result.score, 160);
 });
+
+test("scoreConversation: url_screenshot gives +50", () => {
+  const result = scoreConversation(
+    { last_message: "Đây là hình https://prnt.sc/abc123" },
+    { screenshotUrl: "https://prnt.sc/abc123" },
+    false,
+    false
+  );
+  assert.equal(result.score, 50);
+  assert.deepEqual(result.signalsMatched, ["url_screenshot"]);
+});
+
+test("scoreConversation: url_editor gives +50", () => {
+  const result = scoreConversation(
+    { last_message: "https://pagefly.io/editor/xyz" },
+    { editorLink: "https://pagefly.io/editor/xyz" },
+    false,
+    false
+  );
+  assert.equal(result.score, 50);
+  assert.deepEqual(result.signalsMatched, ["url_editor"]);
+});
+
+test("scoreConversation: both URLs in last_message → +100", () => {
+  const result = scoreConversation(
+    { last_message: "ảnh https://prnt.sc/abc và editor https://pagefly.io/editor/xyz" },
+    {
+      screenshotUrl: "https://prnt.sc/abc",
+      editorLink: "https://pagefly.io/editor/xyz",
+    },
+    false,
+    false
+  );
+  assert.equal(result.score, 100);
+  assert.ok(result.signalsMatched.includes("url_screenshot"));
+  assert.ok(result.signalsMatched.includes("url_editor"));
+});
+
+test("scoreConversation: waiting_since_top gives +20", () => {
+  const result = scoreConversation(
+    { last_message: "" },
+    {},
+    true, // isTopWaitingSince
+    false
+  );
+  assert.equal(result.score, 20);
+  assert.deepEqual(result.signalsMatched, ["waiting_since_top"]);
+});
+
+test("scoreConversation: updated_at_top gives +5", () => {
+  const result = scoreConversation(
+    { last_message: "" },
+    {},
+    false,
+    true // isTopUpdatedAt
+  );
+  assert.equal(result.score, 5);
+  assert.deepEqual(result.signalsMatched, ["updated_at_top"]);
+});
+
+test("scoreConversation: all signals combined", () => {
+  const verbatim = "Tôi không scroll được trang này, nó cứ bị stuck giữa chừng";
+  const result = scoreConversation(
+    {
+      last_message: `${verbatim} https://prnt.sc/abc https://pagefly.io/editor/xyz`,
+    },
+    {
+      customerLastMessageText: verbatim,
+      screenshotUrl: "https://prnt.sc/abc",
+      editorLink: "https://pagefly.io/editor/xyz",
+    },
+    true,
+    true
+  );
+  // 60 (substring) + 50 + 50 (urls) + 20 + 5 (recency) = 185
+  // exact_text does not fire because last_message has URL content appended beyond verbatim
+  assert.equal(result.score, 185);
+});

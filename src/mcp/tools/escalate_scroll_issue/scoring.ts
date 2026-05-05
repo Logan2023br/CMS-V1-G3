@@ -77,9 +77,22 @@ function scoreConversation(
     }
   }
 
-  // isTopWaitingSince và isTopUpdatedAt sẽ dùng ở task 6.
-  void isTopWaitingSince;
-  void isTopUpdatedAt;
+  if (inputs.screenshotUrl && lastMessage.includes(inputs.screenshotUrl)) {
+    score += 50;
+    signalsMatched.push("url_screenshot");
+  }
+  if (inputs.editorLink && lastMessage.includes(inputs.editorLink)) {
+    score += 50;
+    signalsMatched.push("url_editor");
+  }
+  if (isTopWaitingSince) {
+    score += 20;
+    signalsMatched.push("waiting_since_top");
+  }
+  if (isTopUpdatedAt) {
+    score += 5;
+    signalsMatched.push("updated_at_top");
+  }
 
   return { score, signalsMatched };
 }
