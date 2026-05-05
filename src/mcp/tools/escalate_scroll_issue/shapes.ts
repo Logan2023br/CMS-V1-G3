@@ -73,6 +73,20 @@ const CRISP_NOTE = z.object({
     ),
 });
 
+const SESSION_MATCH = z.object({
+  score: z
+    .number()
+    .describe("Tổng điểm scoring của conversation được chọn (hoặc cao nhất nếu không cái nào đạt threshold)."),
+  signals_matched: z
+    .array(z.string())
+    .describe(
+      "Signal đã match: 'exact_text', 'substring_text', 'url_screenshot', 'url_editor', 'waiting_since_top', 'updated_at_top'."
+    ),
+  threshold_met: z
+    .boolean()
+    .describe("True nếu top score ≥ 50 và tool đã post note. False nếu dưới threshold (note KHÔNG được post)."),
+});
+
 const ESCALATE_SCROLL_OUTPUT_SHAPE = z.object({
   issue_summary: z
     .string()
@@ -112,6 +126,10 @@ const ESCALATE_SCROLL_OUTPUT_SHAPE = z.object({
     .describe(
       "Error message if the Crisp note posting failed or was skipped. Useful for Hugo and the developer to diagnose."
     ),
+
+  session_match: SESSION_MATCH.optional().describe(
+    "Chi tiết session matching khi tool tự resolve crisp_session_id. Không có khi Hugo truyền crisp_session_id trực tiếp."
+  ),
 });
 
 type EscalateScrollOutput = z.infer<typeof ESCALATE_SCROLL_OUTPUT_SHAPE>;
