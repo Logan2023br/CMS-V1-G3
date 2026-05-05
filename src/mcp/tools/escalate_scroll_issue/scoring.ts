@@ -98,10 +98,62 @@ function scoreConversation(
 }
 
 function findBestSession(
-  _conversations: ConversationLite[],
-  _inputs: ScoringInputs
+  conversations: ConversationLite[],
+  inputs: ScoringInputs
 ): BestSessionResult {
-  throw new Error("not implemented");
+  if (conversations.length === 0) {
+    return { sessionId: null, score: 0, signalsMatched: [], thresholdMet: false };
+  }
+
+  // Tìm top waiting_since và top updated_at trong toàn list (chỉ 1 winner mỗi loại).
+  let topWaitingId: string | undefined;
+  let topWaitingValue = -Infinity;
+  for (const c of conversations) {
+    if (typeof c.waiting_since === "number" && c.waiting_since > topWaitingValue) {
+      topWaitingValue = c.waiting_since;
+      topWaitingId = c.session_id;
+    }
+  }
+
+  let topUpdatedId: string | undefined;
+  let topUpdatedValue = -Infinity;
+  for (const c of conversations) {
+    if (typeof c.updated_at === "number" && c.updated_at > topUpdatedValue) {
+      topUpdatedValue = c.updated_at;
+      topUpdatedId = c.session_id;
+    }
+  }
+
+  const scored = conversations.map((c) => ({
+    conv: c,
+    result: scoreConversation(
+      c,
+      inputs,
+      c.session_id !== undefined && c.session_id === topWaitingId,
+      c.session_id !== undefined && c.session_id === topUpdatedId
+    ),
+  }));
+
+  // Sort: score DESC, waiting_since DESC, updated_at DESC
+  scored.sort((a, b) => {
+    if (b.result.score !== a.result.score) return b.result.score - a.result.score;
+    const aw = a.conv.waiting_since ?? -Infinity;
+    const bw = b.conv.waiting_since ?? -Infinity;
+    if (bw !== aw) return bw - aw;
+    const au = a.conv.updated_at ?? -Infinity;
+    const bu = b.conv.updated_at ?? -Infinity;
+    return bu - au;
+  });
+
+  const top = scored[0];
+  const thresholdMet = top.result.score >= SCORE_THRESHOLD;
+
+  return {
+    sessionId: thresholdMet ? top.conv.session_id ?? null : null,
+    score: top.result.score,
+    signalsMatched: top.result.signalsMatched,
+    thresholdMet,
+  };
 }
 
 export {
