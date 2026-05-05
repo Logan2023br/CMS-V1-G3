@@ -30,6 +30,20 @@ interface BestSessionResult {
 const SCORE_THRESHOLD = 50;
 const SUBSTRING_MIN_LENGTH = 40;
 
+function hasLongSubstring(haystack: string, needle: string, minLen: number): boolean {
+  if (!needle || !haystack) return false;
+  if (needle.length < minLen) {
+    // Khi verbatim ngắn hơn ngưỡng, yêu cầu haystack chứa nguyên needle.
+    return haystack.includes(needle);
+  }
+  // Trượt cửa sổ độ dài minLen trên needle, check xem haystack có chứa cửa sổ nào không.
+  for (let i = 0; i + minLen <= needle.length; i++) {
+    const window = needle.slice(i, i + minLen);
+    if (haystack.includes(window)) return true;
+  }
+  return false;
+}
+
 /**************************************************************************
  * EXPORTS (placeholders — implement in next tasks)
  ***************************************************************************/
@@ -56,6 +70,10 @@ function scoreConversation(
     if (lastMessageNorm === verbatimNorm) {
       score += 100;
       signalsMatched.push("exact_text");
+    }
+    if (hasLongSubstring(lastMessageNorm, verbatimNorm, SUBSTRING_MIN_LENGTH)) {
+      score += 60;
+      signalsMatched.push("substring_text");
     }
   }
 

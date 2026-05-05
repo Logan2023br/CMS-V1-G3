@@ -27,8 +27,8 @@ test("scoreConversation: exact_text gives +100", () => {
     false,
     false
   );
-  assert.equal(result.score, 100);
-  assert.deepEqual(result.signalsMatched, ["exact_text"]);
+  assert.ok(result.score >= 100);
+  assert.ok(result.signalsMatched.includes("exact_text"));
 });
 
 test("scoreConversation: exact_text matches after normalize whitespace", () => {
@@ -38,7 +38,8 @@ test("scoreConversation: exact_text matches after normalize whitespace", () => {
     false,
     false
   );
-  assert.equal(result.score, 100);
+  assert.ok(result.score >= 100);
+  assert.ok(result.signalsMatched.includes("exact_text"));
 });
 
 test("scoreConversation: exact_text skipped when input missing", () => {
@@ -60,4 +61,61 @@ test("scoreConversation: exact_text skipped when input is whitespace only", () =
     false
   );
   assert.equal(result.score, 0);
+});
+
+test("scoreConversation: substring_text gives +60 when ≥40 chars match", () => {
+  const verbatim = "Tôi không scroll được trang này, nó cứ bị stuck giữa chừng";
+  const result = scoreConversation(
+    { last_message: `Khách bảo: ${verbatim} ạ` },
+    { customerLastMessageText: verbatim },
+    false,
+    false
+  );
+  assert.ok(result.signalsMatched.includes("substring_text"));
+  assert.ok(result.score >= 60);
+});
+
+test("scoreConversation: substring_text NOT triggered when verbatim is long but no 40-char window matches", () => {
+  // verbatim is ≥40 chars but haystack shares only a short prefix, no 40-char window present
+  const result = scoreConversation(
+    { last_message: "hello there friend, please help me out" },
+    { customerLastMessageText: "hello there friend, completely different text that does not appear" },
+    false,
+    false
+  );
+  assert.ok(!result.signalsMatched.includes("substring_text"));
+});
+
+test("scoreConversation: substring_text triggers on full short text when verbatim < 40 chars", () => {
+  const verbatim = "page khong scroll";
+  const result = scoreConversation(
+    { last_message: `Anh oi page khong scroll giup em voi` },
+    { customerLastMessageText: verbatim },
+    false,
+    false
+  );
+  assert.ok(result.signalsMatched.includes("substring_text"));
+});
+
+test("scoreConversation: substring_text does NOT trigger when only partial short text matches", () => {
+  const result = scoreConversation(
+    { last_message: "page khong" },
+    { customerLastMessageText: "page khong scroll" },
+    false,
+    false
+  );
+  assert.ok(!result.signalsMatched.includes("substring_text"));
+});
+
+test("scoreConversation: exact_text and substring_text both fire, total = 160", () => {
+  const verbatim = "Tôi không scroll được trang này, nó cứ bị stuck giữa chừng";
+  const result = scoreConversation(
+    { last_message: verbatim },
+    { customerLastMessageText: verbatim },
+    false,
+    false
+  );
+  assert.ok(result.signalsMatched.includes("exact_text"));
+  assert.ok(result.signalsMatched.includes("substring_text"));
+  assert.equal(result.score, 160);
 });
