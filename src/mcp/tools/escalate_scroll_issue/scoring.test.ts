@@ -17,3 +17,47 @@ test("normalize: preserves case", () => {
 test("normalize: collapses tabs and newlines", () => {
   assert.equal(normalize("a\t\tb\nc"), "a b c");
 });
+
+import { scoreConversation } from "./scoring.ts";
+
+test("scoreConversation: exact_text gives +100", () => {
+  const result = scoreConversation(
+    { last_message: "Khách hàng không scroll được" },
+    { customerLastMessageText: "Khách hàng không scroll được" },
+    false,
+    false
+  );
+  assert.equal(result.score, 100);
+  assert.deepEqual(result.signalsMatched, ["exact_text"]);
+});
+
+test("scoreConversation: exact_text matches after normalize whitespace", () => {
+  const result = scoreConversation(
+    { last_message: "  Khách hàng   không scroll  được  " },
+    { customerLastMessageText: "Khách hàng không scroll được" },
+    false,
+    false
+  );
+  assert.equal(result.score, 100);
+});
+
+test("scoreConversation: exact_text skipped when input missing", () => {
+  const result = scoreConversation(
+    { last_message: "anything" },
+    {},
+    false,
+    false
+  );
+  assert.equal(result.score, 0);
+  assert.deepEqual(result.signalsMatched, []);
+});
+
+test("scoreConversation: exact_text skipped when input is whitespace only", () => {
+  const result = scoreConversation(
+    { last_message: "anything" },
+    { customerLastMessageText: "   " },
+    false,
+    false
+  );
+  assert.equal(result.score, 0);
+});

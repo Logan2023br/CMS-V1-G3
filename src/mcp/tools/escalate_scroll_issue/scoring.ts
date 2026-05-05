@@ -39,12 +39,31 @@ function normalize(text: string): string {
 }
 
 function scoreConversation(
-  _conv: ConversationLite,
-  _inputs: ScoringInputs,
-  _isTopWaitingSince: boolean,
-  _isTopUpdatedAt: boolean
+  conv: ConversationLite,
+  inputs: ScoringInputs,
+  isTopWaitingSince: boolean,
+  isTopUpdatedAt: boolean
 ): ScoreResult {
-  throw new Error("not implemented");
+  const signalsMatched: string[] = [];
+  let score = 0;
+
+  const lastMessage = conv.last_message ?? "";
+  const lastMessageNorm = normalize(lastMessage);
+
+  const verbatim = inputs.customerLastMessageText?.trim() ?? "";
+  if (verbatim) {
+    const verbatimNorm = normalize(verbatim);
+    if (lastMessageNorm === verbatimNorm) {
+      score += 100;
+      signalsMatched.push("exact_text");
+    }
+  }
+
+  // isTopWaitingSince và isTopUpdatedAt sẽ dùng ở task 6.
+  void isTopWaitingSince;
+  void isTopUpdatedAt;
+
+  return { score, signalsMatched };
 }
 
 function findBestSession(
