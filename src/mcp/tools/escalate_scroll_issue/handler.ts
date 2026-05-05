@@ -73,11 +73,18 @@ function buildAuthHeader(creds: CrispCreds): string {
   return `Basic ${Buffer.from(`${creds.identifier}:${creds.key}`).toString("base64")}`;
 }
 
+interface SessionMatchInfo {
+  score: number;
+  signalsMatched: string[];
+  thresholdMet: boolean;
+}
+
 interface PostNoteResult {
   posted: boolean;
   error?: string;
   sessionUsed?: string;
-  sessionSource?: "input" | "auto-latest";
+  sessionSource?: "input" | "scored";
+  match?: SessionMatchInfo;
 }
 
 async function postCrispPrivateNote(
@@ -153,95 +160,14 @@ async function fetchHugoConversations(creds: CrispCreds): Promise<FetchListResul
   }
 }
 
-// Crisp's conversation list API returns last_message as a plain string
-// (the text of the last message — no metadata). It also exposes
-// waiting_since: the timestamp at which the visitor sent a message that
-// is still waiting for an operator reply. This is the strongest signal
-// available about which conversation Hugo is currently responding to.
-//
-// Resolver priority when Hugo does not pass crisp_session_id:
-//   1) Find a conversation whose last_message text contains one of the
-//      URLs the user just pasted (screenshot_url or editor_link). This
-//      is deterministic when the user's URL is in the latest message.
-//   2) Otherwise pick the conversation with the most recent
-//      waiting_since — the visitor whose message is freshest and not
-//      yet replied to by an operator.
-//   3) Otherwise fall back to the most-recently-updated conversation.
-
-async function findLatestActiveSession(
-  creds: CrispCreds,
-  matchTokens: string[]
-): Promise<{ sessionId: string | null; error?: string; matchedBy?: string }> {
-  const url = `https://api.crisp.chat/v1/website/${creds.websiteId}/conversations/1`;
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": buildAuthHeader(creds),
-        "X-Crisp-Tier": "plugin",
-      },
-    });
-    if (!response.ok) {
-      const body = await response.text();
-      return {
-        sessionId: null,
-        error: `Crisp list-conversations ${response.status}: ${body.slice(0, 300)}`,
-      };
-    }
-    const json = (await response.json()) as { data?: unknown };
-    const items = Array.isArray(json.data) ? (json.data as ConversationLite[]) : [];
-    if (items.length === 0) {
-      return { sessionId: null, error: "No conversations returned by Crisp." };
-    }
-
-    // (1) Match by URL appearing in last_message text.
-    for (const conv of items) {
-      const text = conv.last_message ?? "";
-      if (!text) continue;
-      const hit = matchTokens.find((t) => t && text.includes(t));
-      if (hit && conv.session_id) {
-        return { sessionId: conv.session_id, matchedBy: `content:${hit}` };
-      }
-    }
-
-    // (2) Sort by waiting_since DESC (most recently-waiting visitor first).
-    const waiting = items.filter(
-      (c) => typeof c.waiting_since === "number" && c.waiting_since > 0
-    );
-    waiting.sort((a, b) => (b.waiting_since ?? 0) - (a.waiting_since ?? 0));
-    if (waiting[0]?.session_id) {
-      return {
-        sessionId: waiting[0].session_id,
-        matchedBy: "waiting-since",
-        error:
-          "Warning: matched by waiting_since rather than URL content. May be wrong if another visitor is also waiting.",
-      };
-    }
-
-    // (3) Last resort: most-recently-updated conversation.
-    const byRecency = [...items].sort(
-      (a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0)
-    );
-    const top = byRecency[0];
-    if (!top?.session_id) {
-      return { sessionId: null, error: "Top conversation has no session_id field." };
-    }
-    return {
-      sessionId: top.session_id,
-      matchedBy: "most-recent-updated",
-      error:
-        "Warning: no URL match and no waiting visitor; picked most-recently-updated conversation as last resort.",
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { sessionId: null, error: `Network/exception: ${message}` };
-  }
-}
-
 async function tryPostNote(
   hintedSessionId: string | undefined,
   content: string,
-  matchTokens: string[]
+  scoringInputs: {
+    customerLastMessageText?: string;
+    screenshotUrl?: string;
+    editorLink?: string;
+  }
 ): Promise<PostNoteResult> {
   const creds = readCrispCreds();
   if (!creds) {
@@ -252,15 +178,11 @@ async function tryPostNote(
     };
   }
 
-  // 1) If Hugo passed a session ID, prefer it.
+  // 1) Hugo truyền session_id → POST thẳng, không cần scoring.
   if (hintedSessionId) {
     const r = await postCrispPrivateNote(hintedSessionId, content, creds);
     if (r.ok) {
-      return {
-        posted: true,
-        sessionUsed: hintedSessionId,
-        sessionSource: "input",
-      };
+      return { posted: true, sessionUsed: hintedSessionId, sessionSource: "input" };
     }
     return {
       posted: false,
@@ -270,30 +192,48 @@ async function tryPostNote(
     };
   }
 
-  // 2) Auto-resolve: prefer the conversation whose last_message contains
-  //    the user's pasted URLs, with weaker fallbacks below.
-  const lookup = await findLatestActiveSession(creds, matchTokens);
-  if (!lookup.sessionId) {
+  // 2) Auto-resolve qua hybrid scoring.
+  const list = await fetchHugoConversations(creds);
+  if (list.error) {
+    return { posted: false, error: list.error };
+  }
+  if (list.conversations.length === 0) {
     return {
       posted: false,
-      error: `No crisp_session_id provided and could not auto-resolve one: ${lookup.error}`,
+      error: "Hugo's inbox không có conversation nào để match.",
     };
   }
 
-  const r = await postCrispPrivateNote(lookup.sessionId, content, creds);
+  const best = findBestSession(list.conversations, scoringInputs);
+  const matchInfo: SessionMatchInfo = {
+    score: best.score,
+    signalsMatched: best.signalsMatched,
+    thresholdMet: best.thresholdMet,
+  };
+
+  if (!best.thresholdMet || !best.sessionId) {
+    return {
+      posted: false,
+      error: `Không tìm thấy conversation đủ tin cậy (top score ${best.score} < threshold 50). Signals: [${best.signalsMatched.join(", ")}]. Hugo nên xin user paste lại link hoặc dev xử tay.`,
+      match: matchInfo,
+    };
+  }
+
+  const r = await postCrispPrivateNote(best.sessionId, content, creds);
   if (r.ok) {
     return {
       posted: true,
-      sessionUsed: lookup.sessionId,
-      sessionSource: "auto-latest",
-      error: lookup.error, // surface any matching warning even on success
+      sessionUsed: best.sessionId,
+      sessionSource: "scored",
+      match: matchInfo,
     };
   }
   return {
     posted: false,
-    error: `Auto-resolved session ${lookup.sessionId} (matched by ${lookup.matchedBy}) but posting failed: ${r.error}`,
-    sessionUsed: lookup.sessionId,
-    sessionSource: "auto-latest",
+    error: `Auto-resolved session ${best.sessionId} (score ${best.score}, signals [${best.signalsMatched.join(", ")}]) but POSTing failed: ${r.error}`,
+    sessionUsed: best.sessionId,
+    sessionSource: "scored",
+    match: matchInfo,
   };
 }
 
@@ -344,21 +284,22 @@ async function escalateScrollIssueHandler(
     `Editor: ${input.editor_link}\n` +
     `Ticket: ${input.ticket_url ?? TICKET_URL_FALLBACK}`;
 
-  const matchTokens = [input.screenshot_url, input.editor_link].filter(
-    (s): s is string => typeof s === "string" && s.length > 0
-  );
   const noteResult: PostNoteResult = await tryPostNote(
     input.crisp_session_id,
     noteContent,
-    matchTokens
+    {
+      customerLastMessageText: input.customer_last_message_text,
+      screenshotUrl: input.screenshot_url,
+      editorLink: input.editor_link,
+    }
   );
   if (noteResult.posted) {
     console.log(
-      `[escalate_scroll_issue] Posted Crisp note (session ${noteResult.sessionUsed}, source=${noteResult.sessionSource})`
+      `[escalate_scroll_issue] match: session=${noteResult.sessionUsed} source=${noteResult.sessionSource} score=${noteResult.match?.score ?? "n/a"} signals=[${noteResult.match?.signalsMatched.join(", ") ?? ""}] posted=true`
     );
   } else {
     console.error(
-      `[escalate_scroll_issue] Failed to post Crisp note: ${noteResult.error}`
+      `[escalate_scroll_issue] match: posted=false error=${noteResult.error}`
     );
   }
 
@@ -373,6 +314,13 @@ async function escalateScrollIssueHandler(
     next_step_for_user: WAIT_MESSAGE,
     note_posted: noteResult.posted,
     note_post_error: noteResult.error,
+    session_match: noteResult.match
+      ? {
+          score: noteResult.match.score,
+          signals_matched: noteResult.match.signalsMatched,
+          threshold_met: noteResult.match.thresholdMet,
+        }
+      : undefined,
   };
 }
 
