@@ -22,11 +22,29 @@ test("shouldForward: pass on valid Hugo: note from non-self operator", () => {
   );
 });
 
-test("shouldForward: reject when event is not message:send", () => {
+test("shouldForward: also accepts message:received (operator-side notes)", () => {
   assert.equal(
     shouldForward(
       {
         event: "message:received",
+        data: {
+          type: "note",
+          from: "operator",
+          content: "Hugo: x",
+          user: { nickname: "Logan TS" },
+        },
+      },
+      DEFAULTS
+    ),
+    true
+  );
+});
+
+test("shouldForward: reject when event is unknown (not send/received)", () => {
+  assert.equal(
+    shouldForward(
+      {
+        event: "message:updated",
         data: {
           type: "note",
           from: "operator",

@@ -31,12 +31,17 @@ interface FilterOpts {
  * FILTER
  ***************************************************************************/
 
+// Crisp fires `message:send` for visitor-side messages and
+// `message:received` for operator-side messages (incl. notes). We accept
+// either event here; the `from=operator` check below is the real gate.
+const TRIGGER_EVENTS = new Set(["message:send", "message:received"]);
+
 function shouldForward(
   body: CrispWebhookEvent,
   opts: FilterOpts
 ): boolean {
   if (!opts.selfNickname) return false; // Misconfig: cannot apply loop guard.
-  if (body.event !== "message:send") return false;
+  if (!body.event || !TRIGGER_EVENTS.has(body.event)) return false;
   const data = body.data;
   if (!data) return false;
   if (data.type !== "note") return false;
