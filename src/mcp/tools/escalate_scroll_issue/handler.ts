@@ -107,12 +107,34 @@ function formatNoteContent(fields: NoteFields, ticketUrl: string): string {
   );
 }
 
+interface NoteUser {
+  type: "website";
+  nickname: string;
+  avatar: string;
+}
+
+function readNoteUser(): NoteUser | null {
+  const nickname = process.env.CRISP_NOTE_USER_NICKNAME;
+  const avatar = process.env.CRISP_NOTE_USER_AVATAR;
+  if (!nickname || !avatar) return null;
+  return { type: "website", nickname, avatar };
+}
+
 async function postCrispPrivateNote(
   sessionId: string,
   content: string,
   creds: CrispCreds
 ): Promise<{ ok: boolean; error?: string }> {
   const url = `https://api.crisp.chat/v1/website/${creds.websiteId}/conversation/${sessionId}/message`;
+  const noteUser = readNoteUser();
+
+  const body: Record<string, unknown> = {
+    type: "note",
+    from: "operator",
+    origin: "chat",
+    content,
+  };
+  if (noteUser) body.user = noteUser;
 
   try {
     const response = await fetch(url, {
@@ -122,12 +144,7 @@ async function postCrispPrivateNote(
         "Authorization": buildAuthHeader(creds),
         "X-Crisp-Tier": "plugin",
       },
-      body: JSON.stringify({
-        type: "note",
-        from: "operator",
-        origin: "chat",
-        content,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
