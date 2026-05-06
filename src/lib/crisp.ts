@@ -112,6 +112,48 @@ async function postCrispPrivateNote(
   }
 }
 
+async function postCrispText(
+  sessionId: string,
+  content: string,
+  creds: CrispCreds
+): Promise<{ ok: boolean; error?: string }> {
+  const url = `https://api.crisp.chat/v1/website/${creds.websiteId}/conversation/${sessionId}/message`;
+  const noteUser = readNoteUser();
+
+  const body: Record<string, unknown> = {
+    type: "text",
+    from: "operator",
+    origin: "chat",
+    content,
+  };
+  if (noteUser) body.user = noteUser;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": buildAuthHeader(creds),
+        "X-Crisp-Tier": "plugin",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text();
+      return {
+        ok: false,
+        error: `Crisp API ${response.status}: ${responseBody.slice(0, 500)}`,
+      };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Network/exception: ${message}` };
+  }
+}
+
 async function fetchHugoConversations(creds: CrispCreds): Promise<FetchListResult> {
   const url =
     `https://api.crisp.chat/v1/website/${creds.websiteId}/conversations/1` +
@@ -191,6 +233,7 @@ export {
   readNoteUser,
   buildAuthHeader,
   postCrispPrivateNote,
+  postCrispText,
   fetchHugoConversations,
   fetchConversationMessages,
   verifyHmacSignature,
