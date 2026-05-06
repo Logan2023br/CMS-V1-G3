@@ -2,6 +2,7 @@
  * TYPES
  ***************************************************************************/
 
+import crypto from "node:crypto";
 import { type ConversationLite } from "@/mcp/tools/escalate_scroll_issue/scoring.js";
 
 interface CrispCreds {
@@ -44,6 +45,25 @@ function readNoteUser(): NoteUser | null {
 
 function buildAuthHeader(creds: CrispCreds): string {
   return `Basic ${Buffer.from(`${creds.identifier}:${creds.key}`).toString("base64")}`;
+}
+
+function verifyHmacSignature(
+  rawBody: string,
+  signature: string | undefined,
+  secret: string | undefined
+): boolean {
+  if (!signature || !secret) return false;
+  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  // crypto.timingSafeEqual requires equal-length buffers; bail out if lengths differ.
+  const expectedBuf = Buffer.from(expected, "hex");
+  let receivedBuf: Buffer;
+  try {
+    receivedBuf = Buffer.from(signature, "hex");
+  } catch {
+    return false;
+  }
+  if (expectedBuf.length !== receivedBuf.length) return false;
+  return crypto.timingSafeEqual(expectedBuf, receivedBuf);
 }
 
 /**************************************************************************
@@ -128,6 +148,7 @@ export {
   readCrispCreds,
   readNoteUser,
   buildAuthHeader,
+  verifyHmacSignature,
   postCrispPrivateNote,
   fetchHugoConversations,
   HUGO_INBOX_FILTER,
