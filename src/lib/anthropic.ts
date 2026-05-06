@@ -1,3 +1,5 @@
+import Anthropic from "@anthropic-ai/sdk";
+
 /**************************************************************************
  * TYPES
  ***************************************************************************/
@@ -85,6 +87,45 @@ function hasHugoPrefix(content: string | undefined): boolean {
 }
 
 /**************************************************************************
+ * CLAUDE CLIENT
+ ***************************************************************************/
+
+interface CallClaudeResult {
+  ok: boolean;
+  text?: string;
+  error?: string;
+}
+
+async function callClaude(
+  prompt: BuildPromptOutput
+): Promise<CallClaudeResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return { ok: false, error: "ANTHROPIC_API_KEY not configured." };
+  }
+  const model = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5";
+
+  const client = new Anthropic({ apiKey });
+  try {
+    const response = await client.messages.create({
+      model,
+      max_tokens: 600,
+      temperature: 0.3,
+      system: prompt.system,
+      messages: [{ role: "user", content: prompt.userMessage }],
+    });
+    const textBlock = response.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      return { ok: false, error: "Claude response had no text block." };
+    }
+    return { ok: true, text: textBlock.text };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Anthropic SDK error: ${message}` };
+  }
+}
+
+/**************************************************************************
  * EXPORTS
  ***************************************************************************/
 
@@ -93,6 +134,7 @@ export {
   parseClaudeResponse,
   stripHugoPrefix,
   hasHugoPrefix,
+  callClaude,
   NOTE_TRIGGER_PREFIX,
   SYSTEM_PROMPT,
   type CustomerMessage,
