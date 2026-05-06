@@ -140,6 +140,48 @@ async function fetchHugoConversations(creds: CrispCreds): Promise<FetchListResul
   }
 }
 
+interface CrispMessage {
+  type?: string;
+  from?: string;
+  content?: unknown;
+  fingerprint?: number;
+  timestamp?: number;
+  user?: { nickname?: string };
+}
+
+interface FetchMessagesResult {
+  messages: CrispMessage[];
+  error?: string;
+}
+
+async function fetchConversationMessages(
+  sessionId: string,
+  creds: CrispCreds
+): Promise<FetchMessagesResult> {
+  const url = `https://api.crisp.chat/v1/website/${creds.websiteId}/conversation/${sessionId}/messages`;
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": buildAuthHeader(creds),
+        "X-Crisp-Tier": "plugin",
+      },
+    });
+    if (!response.ok) {
+      const responseBody = await response.text();
+      return {
+        messages: [],
+        error: `Crisp messages ${response.status}: ${responseBody.slice(0, 300)}`,
+      };
+    }
+    const json = (await response.json()) as { data?: unknown };
+    const items = Array.isArray(json.data) ? (json.data as CrispMessage[]) : [];
+    return { messages: items };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { messages: [], error: `Network/exception: ${message}` };
+  }
+}
+
 /**************************************************************************
  * EXPORTS
  ***************************************************************************/
@@ -148,11 +190,14 @@ export {
   readCrispCreds,
   readNoteUser,
   buildAuthHeader,
-  verifyHmacSignature,
   postCrispPrivateNote,
   fetchHugoConversations,
+  fetchConversationMessages,
+  verifyHmacSignature,
   HUGO_INBOX_FILTER,
   type CrispCreds,
   type NoteUser,
   type FetchListResult,
+  type CrispMessage,
+  type FetchMessagesResult,
 };
