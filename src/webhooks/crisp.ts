@@ -14,11 +14,12 @@ import { forwardNoteToCustomer } from "@/webhooks/note-forwarder.js";
 interface CrispWebhookEvent {
   event?: string;
   website_id?: string;
-  session_id?: string;
+  session_id?: string; // Some events expose it at root; usually it's nested under `data`.
   data?: {
     type?: string;
     from?: string;
     content?: string;
+    session_id?: string;
     user?: { nickname?: string };
   };
 }
@@ -86,7 +87,8 @@ async function handleCrispWebhook(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const sessionId = parsed.session_id;
+  // Crisp nests session_id under `data` for message events; fall back to root for safety.
+  const sessionId = parsed.data?.session_id ?? parsed.session_id;
   const content = parsed.data?.content;
   if (!sessionId || !content) {
     res.status(200).send("ignored: missing session_id or content");
