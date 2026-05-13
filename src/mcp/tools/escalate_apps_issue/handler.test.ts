@@ -101,3 +101,62 @@ test("apps handler: next_step_for_user mentions Vietnamese labels", async () => 
   assert.match(out.next_step_for_user, /hình ảnh hoặc video/);
   assert.match(out.next_step_for_user, /trạng thái publish/);
 });
+
+import { formatAppsNoteContent } from "./handler.ts";
+
+test("formatAppsNoteContent: single editor + single media + published", () => {
+  const note = formatAppsNoteContent(
+    {
+      issueDescription: "App bundle không hiển thị",
+      editorLinks: ["https://admin.shopify.com/store/x/apps/pagefly/editor/abc"],
+      mediaUrls: ["https://prnt.sc/abc"],
+      publishStatus: "published",
+    },
+    "https://app.crisp.chat/website/W/inbox/session_S"
+  );
+  assert.equal(
+    note,
+    "Issue: App bundle không hiển thị, editor: https://admin.shopify.com/store/x/apps/pagefly/editor/abc, hình ảnh/video: https://prnt.sc/abc\nTicket: https://app.crisp.chat/website/W/inbox/session_S\nAllowed to publish"
+  );
+});
+
+test("formatAppsNoteContent: multiple editors + multiple media + only_save", () => {
+  const note = formatAppsNoteContent(
+    {
+      issueDescription: "Apps không work",
+      editorLinks: [
+        "https://admin.shopify.com/store/x/apps/pagefly/editor/p1",
+        "https://admin.shopify.com/store/x/apps/pagefly/editor/p2",
+      ],
+      mediaUrls: ["https://prnt.sc/a", "https://www.loom.com/share/xyz"],
+      publishStatus: "only_save",
+    },
+    "https://app.crisp.chat/website/W/inbox/session_S"
+  );
+  assert.equal(
+    note,
+    "Issue: Apps không work, editor: https://admin.shopify.com/store/x/apps/pagefly/editor/p1, https://admin.shopify.com/store/x/apps/pagefly/editor/p2, hình ảnh/video: https://prnt.sc/a, https://www.loom.com/share/xyz\nTicket: https://app.crisp.chat/website/W/inbox/session_S\nOnly Save"
+  );
+});
+
+test("formatAppsNoteContent: silently drops placeholder URLs from arrays", () => {
+  const note = formatAppsNoteContent(
+    {
+      issueDescription: "App issue",
+      editorLinks: [
+        "https://admin.shopify.com/store/x/apps/pagefly/editor/real",
+        "https://YOUR_STORE.myshopify.com/admin",
+      ],
+      mediaUrls: [
+        "https://dummyimage.com/600x400",
+        "https://prnt.sc/real",
+      ],
+      publishStatus: "published",
+    },
+    "https://app.crisp.chat/website/W/inbox/session_S"
+  );
+  assert.ok(!note.includes("YOUR_STORE"));
+  assert.ok(!note.includes("dummyimage.com"));
+  assert.ok(note.includes("https://admin.shopify.com/store/x/apps/pagefly/editor/real"));
+  assert.ok(note.includes("https://prnt.sc/real"));
+});
