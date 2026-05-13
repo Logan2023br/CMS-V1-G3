@@ -1,3 +1,13 @@
+import {
+  readCrispCreds,
+  postCrispPrivateNote,
+  fetchHugoConversations,
+} from "@/lib/crisp.js";
+import {
+  findBestSession,
+  type ScoringInputs,
+} from "@/lib/scoring.js";
+
 /**************************************************************************
  * CONSTANTS
  ***************************************************************************/
@@ -40,6 +50,125 @@ function buildTicketUrl(websiteId: string, sessionId: string): string {
 }
 
 /**************************************************************************
+ * POST-WITH-SCORING GENERIC
+ ***************************************************************************/
+
+interface SessionMatchInfo {
+  score: number;
+  signalsMatched: string[];
+  thresholdMet: boolean;
+}
+
+interface PostNoteResult {
+  posted: boolean;
+  error?: string;
+  sessionUsed?: string;
+  sessionSource?: "input" | "scored";
+  match?: SessionMatchInfo;
+  noteContent: string;
+}
+
+interface TryPostArgs<TFields> {
+  hintedSessionId?: string;
+  fields: TFields;
+  providedTicketUrl?: string;
+  scoringInputs: ScoringInputs;
+  formatNote: (fields: TFields, ticketUrl: string) => string;
+}
+
+async function tryPostNoteWithScoring<TFields>(
+  args: TryPostArgs<TFields>
+): Promise<PostNoteResult> {
+  const { hintedSessionId, fields, providedTicketUrl, scoringInputs, formatNote } = args;
+
+  const creds = readCrispCreds();
+  if (!creds) {
+    return {
+      posted: false,
+      error:
+        "Crisp API credentials not configured (set CRISP_WEBSITE_ID, CRISP_IDENTIFIER, CRISP_KEY in .env).",
+      noteContent: formatNote(fields, providedTicketUrl ?? TICKET_URL_FALLBACK),
+    };
+  }
+
+  // 1) Hugo truyền session_id → POST thẳng, không cần scoring.
+  if (hintedSessionId) {
+    const ticketUrl = providedTicketUrl ?? buildTicketUrl(creds.websiteId, hintedSessionId);
+    const noteContent = formatNote(fields, ticketUrl);
+    const r = await postCrispPrivateNote(hintedSessionId, noteContent, creds);
+    if (r.ok) {
+      return {
+        posted: true,
+        sessionUsed: hintedSessionId,
+        sessionSource: "input",
+        noteContent,
+      };
+    }
+    return {
+      posted: false,
+      error: `Posting to provided session ${hintedSessionId} failed: ${r.error}`,
+      sessionUsed: hintedSessionId,
+      sessionSource: "input",
+      noteContent,
+    };
+  }
+
+  // 2) Auto-resolve qua hybrid scoring.
+  const list = await fetchHugoConversations(creds);
+  if (list.error) {
+    return {
+      posted: false,
+      error: list.error,
+      noteContent: formatNote(fields, providedTicketUrl ?? TICKET_URL_FALLBACK),
+    };
+  }
+  if (list.conversations.length === 0) {
+    return {
+      posted: false,
+      error: "Hugo's inbox không có conversation nào để match.",
+      noteContent: formatNote(fields, providedTicketUrl ?? TICKET_URL_FALLBACK),
+    };
+  }
+
+  const best = findBestSession(list.conversations, scoringInputs);
+  const matchInfo: SessionMatchInfo = {
+    score: best.score,
+    signalsMatched: best.signalsMatched,
+    thresholdMet: best.thresholdMet,
+  };
+
+  if (!best.thresholdMet || !best.sessionId) {
+    return {
+      posted: false,
+      error: `Không tìm thấy conversation đủ tin cậy (top score ${best.score} < threshold 50). Signals: [${best.signalsMatched.join(", ")}]. Hugo nên xin user paste lại link hoặc dev xử tay.`,
+      match: matchInfo,
+      noteContent: formatNote(fields, providedTicketUrl ?? TICKET_URL_FALLBACK),
+    };
+  }
+
+  const ticketUrl = providedTicketUrl ?? buildTicketUrl(creds.websiteId, best.sessionId);
+  const noteContent = formatNote(fields, ticketUrl);
+  const r = await postCrispPrivateNote(best.sessionId, noteContent, creds);
+  if (r.ok) {
+    return {
+      posted: true,
+      sessionUsed: best.sessionId,
+      sessionSource: "scored",
+      match: matchInfo,
+      noteContent,
+    };
+  }
+  return {
+    posted: false,
+    error: `Auto-resolved session ${best.sessionId} (score ${best.score}, signals [${best.signalsMatched.join(", ")}]) but POSTing failed: ${r.error}`,
+    sessionUsed: best.sessionId,
+    sessionSource: "scored",
+    match: matchInfo,
+    noteContent,
+  };
+}
+
+/**************************************************************************
  * EXPORTS
  ***************************************************************************/
 
@@ -49,4 +178,7 @@ export {
   PLACEHOLDER_PATTERNS,
   looksLikePlaceholder,
   buildTicketUrl,
+  tryPostNoteWithScoring,
+  type SessionMatchInfo,
+  type PostNoteResult,
 };
