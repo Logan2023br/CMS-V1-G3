@@ -6,7 +6,7 @@ import type {
   EscalateScrollInput,
   EscalateScrollOutput,
 } from "@/mcp/tools/escalate_scroll_issue/shapes.js";
-import { findBestSession } from "@/mcp/tools/escalate_scroll_issue/scoring.js";
+import { findBestSession } from "@/lib/scoring.js";
 import {
   readCrispCreds,
   postCrispPrivateNote,

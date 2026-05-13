@@ -3,7 +3,7 @@
  ***************************************************************************/
 
 import crypto from "node:crypto";
-import { type ConversationLite } from "@/mcp/tools/escalate_scroll_issue/scoring.js";
+import { type ConversationLite } from "@/lib/scoring.js";
 
 interface CrispCreds {
   websiteId: string;
