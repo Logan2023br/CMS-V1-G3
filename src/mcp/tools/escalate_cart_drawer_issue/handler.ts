@@ -3,14 +3,12 @@
  ***************************************************************************/
 
 import type {
-  EscalateScrollInput,
-  EscalateScrollOutput,
-} from "@/mcp/tools/escalate_scroll_issue/shapes.js";
+  EscalateCartDrawerInput,
+  EscalateCartDrawerOutput,
+} from "@/mcp/tools/escalate_cart_drawer_issue/shapes.js";
 import {
-  TICKET_URL_FALLBACK,
   hasVietnameseDiacritics,
   looksLikePlaceholder,
-  buildTicketUrl,
   pickMissingInfoMessage,
   pickWaitMessage,
   translateIssueToEnglish,
@@ -22,77 +20,85 @@ import {
  * CONSTANTS
  ***************************************************************************/
 
-type MissingField = "screenshot" | "editor_link";
+type MissingField = "editor_link" | "live_preview_url";
 
 const MISSING_LABELS_VI: Record<MissingField, string> = {
-  screenshot: "hình ảnh (screenshot)",
   editor_link: "link editor",
+  live_preview_url: "link live preview",
 };
 
 const MISSING_LABELS_EN: Record<MissingField, string> = {
-  screenshot: "a screenshot",
   editor_link: "the editor link",
+  live_preview_url: "the live preview URL",
 };
 
-interface NoteFields {
+/**************************************************************************
+ * NOTE FORMAT
+ ***************************************************************************/
+
+interface CartNoteFields {
   issueDescription: string;
-  screenshotUrl: string;
+  livePreviewUrl: string;
   editorLink: string;
+  screenshotUrl?: string;
 }
 
-function formatNoteContent(fields: NoteFields, ticketUrl: string): string {
-  return (
-    `Issue: ${fields.issueDescription}, screenshot: ${fields.screenshotUrl}\n` +
-    `Editor: ${fields.editorLink}\n` +
-    `Ticket: ${ticketUrl}`
-  );
+function formatCartNoteContent(fields: CartNoteFields, ticketUrl: string): string {
+  // Silently drop placeholder screenshot URLs (already filtered upstream,
+  // but defend in depth in case future call sites skip the gate).
+  const hasScreenshot =
+    fields.screenshotUrl && !looksLikePlaceholder(fields.screenshotUrl);
+
+  const issueLine = hasScreenshot
+    ? `Issue: ${fields.issueDescription}, live preview: ${fields.livePreviewUrl}, screenshot: ${fields.screenshotUrl}`
+    : `Issue: ${fields.issueDescription}, live preview: ${fields.livePreviewUrl}`;
+
+  return `${issueLine}\nEditor: ${fields.editorLink}\nTicket: ${ticketUrl}`;
 }
 
 /**************************************************************************
  * MAIN HANDLER
  ***************************************************************************/
 
-async function escalateScrollIssueHandler(
-  input: EscalateScrollInput
-): Promise<EscalateScrollOutput> {
+async function escalateCartDrawerIssueHandler(
+  input: EscalateCartDrawerInput
+): Promise<EscalateCartDrawerOutput> {
   const missing: MissingField[] = [];
 
-  if (!input.screenshot_url) missing.push("screenshot");
   if (!input.editor_link) missing.push("editor_link");
+  if (!input.live_preview_url) missing.push("live_preview_url");
 
-  // Reject obvious placeholders / fabricated URLs. Hugo sometimes invents
-  // values like "YOUR_STORE", "PAGE_ID", "dummyimage.com" to satisfy the
-  // schema instead of asking the user. Treat these as "missing".
-  if (input.screenshot_url && looksLikePlaceholder(input.screenshot_url)) {
-    if (!missing.includes("screenshot")) missing.push("screenshot");
-  }
   if (input.editor_link && looksLikePlaceholder(input.editor_link)) {
     if (!missing.includes("editor_link")) missing.push("editor_link");
+  }
+  if (input.live_preview_url && looksLikePlaceholder(input.live_preview_url)) {
+    if (!missing.includes("live_preview_url")) missing.push("live_preview_url");
   }
 
   if (missing.length > 0) {
     const isVi = hasVietnameseDiacritics(input.customer_last_message_text);
     const labelDict = isVi ? MISSING_LABELS_VI : MISSING_LABELS_EN;
     const labels = missing.map((key) => labelDict[key]).join(", ");
-
     return {
       issue_summary: "Need more information before escalating to the technical team.",
       is_ready_for_escalation: false,
       missing_info: missing,
-      crisp_note: {
-        content: "",
-        formatted_message: "",
-      },
+      crisp_note: { content: "", formatted_message: "" },
       next_step_for_user: pickMissingInfoMessage(input.customer_last_message_text, labels),
       note_posted: false,
       note_post_error:
-        "Not ready for escalation — Hugo MUST ask the user for the real screenshot URL and the real editor link, then call this tool again with the user's actual values. Do NOT fabricate placeholder URLs (no 'YOUR_STORE', no 'PAGE_ID', no 'dummyimage.com', etc.).",
+        "Not ready for escalation — Hugo MUST ask the user for the real editor link and live preview URL, then call this tool again with the user's actual values. Do NOT fabricate placeholder URLs.",
     };
   }
 
-  // Past the missing-info gate above, both fields are guaranteed present.
-  const screenshotUrl = input.screenshot_url as string;
+  // Past the gate above, both fields are guaranteed present.
   const editorLink = input.editor_link as string;
+  const livePreviewUrl = input.live_preview_url as string;
+  // Drop placeholder screenshots silently.
+  const screenshotUrl =
+    input.screenshot_url && !looksLikePlaceholder(input.screenshot_url)
+      ? input.screenshot_url
+      : undefined;
 
   // The note (TS-facing) must always be English. Translate if Hugo passed Vietnamese.
   const issueDescriptionEn = await translateIssueToEnglish(input.issue_description);
@@ -101,8 +107,9 @@ async function escalateScrollIssueHandler(
     hintedSessionId: input.crisp_session_id,
     fields: {
       issueDescription: issueDescriptionEn,
-      screenshotUrl,
+      livePreviewUrl,
       editorLink,
+      screenshotUrl,
     },
     providedTicketUrl: input.ticket_url,
     scoringInputs: {
@@ -110,15 +117,16 @@ async function escalateScrollIssueHandler(
       screenshotUrl,
       editorLink,
     },
-    formatNote: formatNoteContent,
+    formatNote: formatCartNoteContent,
   });
+
   if (noteResult.posted) {
     console.log(
-      `[escalate_scroll_issue] match: session=${noteResult.sessionUsed} source=${noteResult.sessionSource} score=${noteResult.match?.score ?? "n/a"} signals=[${noteResult.match?.signalsMatched.join(", ") ?? ""}] posted=true`
+      `[escalate_cart_drawer_issue] match: session=${noteResult.sessionUsed} source=${noteResult.sessionSource} score=${noteResult.match?.score ?? "n/a"} signals=[${noteResult.match?.signalsMatched.join(", ") ?? ""}] posted=true`
     );
   } else {
     console.error(
-      `[escalate_scroll_issue] match: posted=false error=${noteResult.error}`
+      `[escalate_cart_drawer_issue] match: posted=false error=${noteResult.error}`
     );
   }
 
@@ -147,4 +155,4 @@ async function escalateScrollIssueHandler(
  * EXPORTS
  ***************************************************************************/
 
-export { escalateScrollIssueHandler };
+export { escalateCartDrawerIssueHandler, formatCartNoteContent };

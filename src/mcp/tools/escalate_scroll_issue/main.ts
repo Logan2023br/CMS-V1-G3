@@ -55,7 +55,7 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
         INPUTS
         ===========================================================
 
-        - issue_description (required) — Your one-line paraphrase of the user's complaint in Vietnamese (e.g. "Khách hàng không scroll được page", "Page scroll bị giật ở mobile").
+        - issue_description (required) — Your one-line paraphrase of the user's complaint, ALWAYS IN ENGLISH regardless of the user's chat language (e.g. "Customer cannot scroll the page", "Scroll is laggy on mobile"). The technical team reads notes in English.
 
         - editor_link (required) — The PageFly editor URL the user actually pasted in the conversation. Take what the user sent. Do NOT invent or use a placeholder. If the user has not shared it yet, ASK them first.
 
@@ -67,6 +67,8 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
         - ticket_url (optional) — Only include if your runtime actually exposes the live Crisp conversation URL to you. If you do NOT have it, omit this field entirely. NEVER pass a placeholder, format string, or fabricated URL.
 
         - crisp_session_id (optional but STRONGLY recommended) — The Crisp session ID for THIS conversation (looks like "session_xxxxxxxx-xxxx-xxxx-..."). If you have access to it from your runtime context, include it — the tool will then automatically POST the private note to this Crisp conversation via the Crisp REST API, and you do not need to do anything else. If you do not have it, omit it; the tool will still return the note text but will NOT post it.
+
+        - customer_last_message_text (optional but STRONGLY recommended) — Copy nguyên xi tin nhắn CUỐI CÙNG của user trong conversation này. KHÔNG paraphrase, KHÔNG dịch, KHÔNG sửa typo, KHÔNG trim. Tool dùng text này để tìm đúng conversation khi crisp_session_id không có. Bỏ qua field này nếu tin nhắn cuối là attachment/file (không có text).
 
         ===========================================================
         WHAT YOU MUST DO
@@ -82,7 +84,7 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
         Ask for the missing one. Do not call the tool yet.
 
         STEP 4 — User has provided BOTH a screenshot URL AND an editor link.
-        a) Call escalate_scroll_issue with: issue_description, editor_link, screenshot_url. Include ticket_url and crisp_session_id if you have them.
+        a) Call escalate_scroll_issue with: issue_description, editor_link, screenshot_url. Include ticket_url and crisp_session_id if you have them. ALWAYS include customer_last_message_text (verbatim copy of user's last text message) unless the user's last message had no text content.
         b) Inspect the response:
            - If note_posted === true → the tool already posted the private note for you. You only need to reply to the user with next_step_for_user verbatim. Do NOT also try to post the note yourself; that would create a duplicate.
            - If note_posted === false → the tool could not post the note (no session ID or API failure). Reply to the user with next_step_for_user anyway, then if you have a way to post a private note natively, post crisp_note.content. The note_post_error field explains why posting failed.
@@ -99,9 +101,15 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
         OUTPUT HANDLING
         ===========================================================
 
-        - is_ready_for_escalation === false → Do NOT post any note. Ask the user for what is listed in missing_info, using next_step_for_user as your reply.
-        - is_ready_for_escalation === true AND note_posted === true → The tool already posted the private note. Just reply to the user with next_step_for_user verbatim. Do not duplicate the note.
-        - is_ready_for_escalation === true AND note_posted === false → Reply with next_step_for_user. If you have native ability to post a Crisp private note, post crisp_note.content. note_post_error explains why the tool could not post.
+        - is_ready_for_escalation === false → Do NOT post any note. Ask the user for what is listed in missing_info, using next_step_for_user (translated to the user's language — see LANGUAGE rule below) as your reply.
+        - is_ready_for_escalation === true AND note_posted === true → The tool already posted the private note. Just reply to the user with next_step_for_user (translated to the user's language).
+        - is_ready_for_escalation === true AND note_posted === false → Reply with next_step_for_user (translated to the user's language). If you have native ability to post a Crisp private note, post crisp_note.content unchanged. note_post_error explains why the tool could not post.
+
+        ===========================================================
+        LANGUAGE OF YOUR REPLY TO THE USER
+        ===========================================================
+
+        next_step_for_user is already returned in the customer's language (the tool detects Vietnamese vs English from customer_last_message_text). Reply with it VERBATIM — do NOT translate it again, do NOT paraphrase. crisp_note.content is always English — it is for the TS team, not the customer.
 
         ===========================================================
         EXACT NOTE FORMAT (do not change, do not add headers, do not add cc tags)

@@ -45,6 +45,13 @@ const ESCALATE_SCROLL_INPUT_SHAPE = z.object({
     .describe(
       "The Crisp conversation session ID for this chat (looks like 'session_xxxxxxxx-xxxx-xxxx-...'). If you have it from your runtime context, include it — the tool will then POST the private note directly to this Crisp conversation via Crisp's REST API. If you do not have it, leave the field out and the tool will still return the note text but will NOT post it automatically."
     ),
+
+  customer_last_message_text: z
+    .string()
+    .optional()
+    .describe(
+      "Verbatim text của tin nhắn CUỐI CÙNG mà user gửi trong cuộc hội thoại này. Copy nguyên xi — KHÔNG paraphrase, KHÔNG trim, KHÔNG sửa typo, KHÔNG dịch. Tool dùng text này để tìm đúng conversation khi crisp_session_id không có. Bỏ qua field này nếu tin nhắn cuối là attachment/file (không có text)."
+    ),
 });
 
 type EscalateScrollInput = z.infer<typeof ESCALATE_SCROLL_INPUT_SHAPE>;
@@ -64,6 +71,20 @@ const CRISP_NOTE = z.object({
     .describe(
       "Same content, ready to post directly into Crisp. Empty string if not ready."
     ),
+});
+
+const SESSION_MATCH = z.object({
+  score: z
+    .number()
+    .describe("Tổng điểm scoring của conversation được chọn (hoặc cao nhất nếu không cái nào đạt threshold)."),
+  signals_matched: z
+    .array(z.string())
+    .describe(
+      "Signal đã match: 'exact_text', 'substring_text', 'url_screenshot', 'url_editor', 'waiting_since_top', 'updated_at_top'."
+    ),
+  threshold_met: z
+    .boolean()
+    .describe("True nếu top score ≥ 50 và tool đã post note. False nếu dưới threshold (note KHÔNG được post)."),
 });
 
 const ESCALATE_SCROLL_OUTPUT_SHAPE = z.object({
@@ -105,6 +126,10 @@ const ESCALATE_SCROLL_OUTPUT_SHAPE = z.object({
     .describe(
       "Error message if the Crisp note posting failed or was skipped. Useful for Hugo and the developer to diagnose."
     ),
+
+  session_match: SESSION_MATCH.optional().describe(
+    "Chi tiết session matching khi tool tự resolve crisp_session_id. Không có khi Hugo truyền crisp_session_id trực tiếp."
+  ),
 });
 
 type EscalateScrollOutput = z.infer<typeof ESCALATE_SCROLL_OUTPUT_SHAPE>;

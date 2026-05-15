@@ -7,13 +7,21 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 import { createMcpServer } from "@/mcp/index.js";
 import { mcpLogger } from "@/utils/logger.js";
+import { handleCrispWebhook } from "@/webhooks/crisp.js";
 
 /**************************************************************************
  * SERVER
  ***************************************************************************/
 
 const app = express();
-app.use(express.json());
+// Capture raw body so the Crisp webhook handler can verify HMAC signatures.
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as { rawBody?: string }).rawBody = buf.toString("utf8");
+    },
+  })
+);
 
 const server = createMcpServer();
 
@@ -28,6 +36,28 @@ app.get("/", (_req, res) => {
 app.get("/health", (_req, res) => {
   res.status(200).send("OK");
 });
+
+// Inject Crisp session_id from request headers into tools/call arguments so
+// escalate_* tools post the note deterministically instead of falling back to
+// hybrid scoring. Crisp's Hugo runtime sends `x-crisp-session-id` on every MCP
+// call but does not surface it to the LLM's tool arguments.
+function injectCrispSessionId(
+  body: unknown,
+  headers: Record<string, string | string[] | undefined>
+): void {
+  if (!body || typeof body !== "object") return;
+  const rpc = body as { method?: string; params?: { arguments?: Record<string, unknown> } };
+  if (rpc.method !== "tools/call") return;
+  const args = rpc.params?.arguments;
+  if (!args) return;
+  // Don't override if the caller already passed one.
+  if (typeof args.crisp_session_id === "string" && args.crisp_session_id.length > 0) return;
+  const headerValue = headers["x-crisp-session-id"];
+  const sessionId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  if (typeof sessionId === "string" && sessionId.length > 0) {
+    args.crisp_session_id = sessionId;
+  }
+}
 
 // Registering MCP endpoint
 app.post("/mcp", (req, res) => {
@@ -46,9 +76,8 @@ app.post("/mcp", (req, res) => {
     mcpLogger("out", { statusCode: res.statusCode });
   });
 
+  injectCrispSessionId(req.body, req.headers);
   mcpLogger("in", req.body);
-  // Temporary debug: discover whether Crisp passes session/conversation info via headers
-  console.log("→ MCP Headers", JSON.stringify(req.headers, null, 2));
 
   server
     .connect(transport)
@@ -60,6 +89,15 @@ app.post("/mcp", (req, res) => {
         res.status(500).json({ error: "MCP request failed" });
       }
     });
+});
+
+app.post("/webhooks/crisp", (req, res) => {
+  handleCrispWebhook(req, res).catch((err: unknown) => {
+    console.error("[crisp-webhook] handler threw:", err);
+    if (!res.headersSent) {
+      res.status(500).send("handler error");
+    }
+  });
 });
 
 // Starting the server
