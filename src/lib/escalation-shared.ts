@@ -12,10 +12,42 @@ import {
  * CONSTANTS
  ***************************************************************************/
 
-const WAIT_MESSAGE =
+// Customer-facing "we forwarded it, please wait" message in two languages.
+// Tool returns the appropriate variant based on whether the customer's most
+// recent message contains Vietnamese diacritics.
+const WAIT_MESSAGE_VI =
   "Cảm ơn bạn đã cung cấp đầy đủ thông tin nhé 😊 Mình đã chuyển vấn đề này đến team technical để kiểm tra chi tiết. Bạn vui lòng chờ trong vài phút, team sẽ xem xét và phản hồi bạn sớm nhất có thể!";
 
+const WAIT_MESSAGE_EN =
+  "Thank you for sharing all the details 😊 I've forwarded this to our technical team for a closer look. Please give them a few minutes — they'll review and reply as soon as possible!";
+
 const TICKET_URL_FALLBACK = "(unknown — tool was called without ticket_url)";
+
+// Vietnamese has unique combining diacritics that no other Latin-based
+// language uses. Presence of any of these characters strongly indicates
+// the customer is writing Vietnamese. Absence defaults to English, which
+// covers the vast majority of non-Vietnamese PageFly customers.
+const VIETNAMESE_DIACRITIC_RE =
+  /[ăâđêôơưàằầèềìòồờùừỳáắấéếíóốớúứýảẳẩẻểỉỏổởủửỷãẵẫẽễĩõỗỡũữỹạặậẹệịọộợụựỵ]/i;
+
+function hasVietnameseDiacritics(text: string | undefined): boolean {
+  if (!text) return false;
+  return VIETNAMESE_DIACRITIC_RE.test(text);
+}
+
+function pickWaitMessage(customerText: string | undefined): string {
+  return hasVietnameseDiacritics(customerText) ? WAIT_MESSAGE_VI : WAIT_MESSAGE_EN;
+}
+
+function pickMissingInfoMessage(
+  customerText: string | undefined,
+  labelsText: string
+): string {
+  if (hasVietnameseDiacritics(customerText)) {
+    return `Để team technical kiểm tra giúp bạn nhanh nhất, bạn vui lòng gửi giúp mình ${labelsText} nhé 😊 Khi có đủ thông tin, mình sẽ chuyển ngay cho team xử lý.`;
+  }
+  return `To help our technical team check this as fast as possible, please share ${labelsText} with me 😊 Once I have all the info, I'll forward it to the team right away.`;
+}
 
 const PLACEHOLDER_PATTERNS: RegExp[] = [
   /YOUR_STORE/i,
@@ -173,11 +205,15 @@ async function tryPostNoteWithScoring<TFields>(
  ***************************************************************************/
 
 export {
-  WAIT_MESSAGE,
+  WAIT_MESSAGE_VI,
+  WAIT_MESSAGE_EN,
   TICKET_URL_FALLBACK,
   PLACEHOLDER_PATTERNS,
   looksLikePlaceholder,
   buildTicketUrl,
+  hasVietnameseDiacritics,
+  pickWaitMessage,
+  pickMissingInfoMessage,
   tryPostNoteWithScoring,
   type SessionMatchInfo,
   type PostNoteResult,

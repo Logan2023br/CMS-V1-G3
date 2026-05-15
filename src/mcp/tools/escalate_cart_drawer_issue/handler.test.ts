@@ -53,11 +53,23 @@ test("cart handler: placeholder live_preview → treated as missing", async () =
   assert.ok(out.missing_info.includes("live_preview_url"));
 });
 
-test("cart handler: next_step_for_user mentions both labels when both missing", async () => {
+test("cart handler: next_step_for_user mentions both labels when both missing (English default)", async () => {
   const out = await escalateCartDrawerIssueHandler({
     issue_description: "Cart issue",
     editor_link: undefined as unknown as string,
     live_preview_url: undefined as unknown as string,
+  });
+  // No customer_last_message_text → defaults to English.
+  assert.match(out.next_step_for_user, /the editor link/);
+  assert.match(out.next_step_for_user, /the live preview URL/);
+});
+
+test("cart handler: next_step_for_user switches to Vietnamese when customer chats Vietnamese", async () => {
+  const out = await escalateCartDrawerIssueHandler({
+    issue_description: "Cart issue",
+    editor_link: undefined as unknown as string,
+    live_preview_url: undefined as unknown as string,
+    customer_last_message_text: "Mình bị lỗi cart drawer",
   });
   assert.match(out.next_step_for_user, /link editor/);
   assert.match(out.next_step_for_user, /link live preview/);
@@ -77,11 +89,11 @@ test("formatCartNoteContent: all fields incl. screenshot", () => {
   );
   assert.equal(
     note,
-    "Issue: Cart drawer không mở khi click ATC, live preview: https://store.myshopify.com/products/test, hình ảnh: https://prnt.sc/abc\nEditor: https://admin.shopify.com/store/x/apps/pagefly/editor/abc\nTicket: https://app.crisp.chat/website/W/inbox/session_S"
+    "Issue: Cart drawer không mở khi click ATC, live preview: https://store.myshopify.com/products/test, screenshot: https://prnt.sc/abc\nEditor: https://admin.shopify.com/store/x/apps/pagefly/editor/abc\nTicket: https://app.crisp.chat/website/W/inbox/session_S"
   );
 });
 
-test("formatCartNoteContent: omits hình ảnh when screenshot missing", () => {
+test("formatCartNoteContent: omits screenshot when missing", () => {
   const note = formatCartNoteContent(
     {
       issueDescription: "Cart drawer không mở",
@@ -108,5 +120,5 @@ test("formatCartNoteContent: silently drops placeholder screenshot", () => {
   );
   // Should NOT include the placeholder URL.
   assert.ok(!note.includes("dummyimage.com"));
-  assert.ok(!note.includes("hình ảnh"));
+  assert.ok(!note.includes("screenshot"));
 });

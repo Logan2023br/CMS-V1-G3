@@ -90,12 +90,26 @@ test("apps handler: multiple fields missing → all in missing_info", async () =
   assert.ok(out.missing_info.includes("publish_status"));
 });
 
-test("apps handler: next_step_for_user mentions Vietnamese labels", async () => {
+test("apps handler: next_step_for_user defaults to English labels", async () => {
   const out = await escalateAppsIssueHandler({
     issue_description: "App issue",
     editor_links: [],
     media_urls: [],
     publish_status: undefined as unknown as "published",
+  });
+  // No customer_last_message_text → defaults to English.
+  assert.match(out.next_step_for_user, /the editor link/);
+  assert.match(out.next_step_for_user, /an image or video/);
+  assert.match(out.next_step_for_user, /whether the page is published/);
+});
+
+test("apps handler: next_step_for_user switches to Vietnamese when customer chats Vietnamese", async () => {
+  const out = await escalateAppsIssueHandler({
+    issue_description: "App issue",
+    editor_links: [],
+    media_urls: [],
+    publish_status: undefined as unknown as "published",
+    customer_last_message_text: "Mình bị lỗi app không hiển thị",
   });
   assert.match(out.next_step_for_user, /link editor/);
   assert.match(out.next_step_for_user, /hình ảnh hoặc video/);
@@ -116,7 +130,7 @@ test("formatAppsNoteContent: single editor + single media + published", () => {
   );
   assert.equal(
     note,
-    "Issue: App bundle không hiển thị, editor: https://admin.shopify.com/store/x/apps/pagefly/editor/abc, hình ảnh/video: https://prnt.sc/abc\nTicket: https://app.crisp.chat/website/W/inbox/session_S\nAllowed to publish"
+    "Issue: App bundle không hiển thị, editor: https://admin.shopify.com/store/x/apps/pagefly/editor/abc, media: https://prnt.sc/abc\nTicket: https://app.crisp.chat/website/W/inbox/session_S\nAllowed to publish"
   );
 });
 
@@ -135,7 +149,7 @@ test("formatAppsNoteContent: multiple editors + multiple media + only_save", () 
   );
   assert.equal(
     note,
-    "Issue: Apps không work, editor: https://admin.shopify.com/store/x/apps/pagefly/editor/p1, https://admin.shopify.com/store/x/apps/pagefly/editor/p2, hình ảnh/video: https://prnt.sc/a, https://www.loom.com/share/xyz\nTicket: https://app.crisp.chat/website/W/inbox/session_S\nOnly Save"
+    "Issue: Apps không work, editor: https://admin.shopify.com/store/x/apps/pagefly/editor/p1, https://admin.shopify.com/store/x/apps/pagefly/editor/p2, media: https://prnt.sc/a, https://www.loom.com/share/xyz\nTicket: https://app.crisp.chat/website/W/inbox/session_S\nOnly Save"
   );
 });
 

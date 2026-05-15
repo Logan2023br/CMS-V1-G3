@@ -53,7 +53,7 @@ function registerEscalateCartDrawerIssueTool(server: McpServer): void {
         INPUTS
         ===========================================================
 
-        - issue_description (required) — Your one-line paraphrase of the user's complaint in Vietnamese.
+        - issue_description (required) — Your one-line paraphrase of the user's complaint, ALWAYS IN ENGLISH regardless of the user's chat language (e.g. "Cart drawer does not open when ATC is clicked"). The technical team reads notes in English.
         - editor_link (required) — The PageFly editor URL the user pasted. Take what the user sent. No placeholders.
         - live_preview_url (required) — The live preview / storefront URL the user pasted (e.g. https://store.myshopify.com/products/abc). Required so the technical team can reproduce the cart drawer / ATC bug. No placeholders.
         - screenshot_url (optional) — Any URL pointing to a picture, IF the user attached one. Cart drawer bugs are usually behavioral, so screenshots may not exist. Omit if not provided.
@@ -89,7 +89,7 @@ function registerEscalateCartDrawerIssueTool(server: McpServer): void {
         LANGUAGE OF YOUR REPLY TO THE USER
         ===========================================================
 
-        next_step_for_user is returned in Vietnamese by default. Detect the user's chat language from their recent messages. If the user is chatting in a language OTHER than Vietnamese (English, Chinese, Arabic, …), TRANSLATE next_step_for_user to that language before sending. Preserve the friendly tone, emojis, and intent — only change the language. crisp_note.content stays in its original form (it's for the TS team, not the customer).
+        next_step_for_user is already returned in the customer's language (the tool detects Vietnamese vs English from customer_last_message_text). Reply with it VERBATIM — do NOT translate it again, do NOT paraphrase. crisp_note.content is always English — it is for the TS team, not the customer.
 
         ===========================================================
         EXACT NOTE FORMAT (do not change)

@@ -55,7 +55,7 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
         INPUTS
         ===========================================================
 
-        - issue_description (required) — Your one-line paraphrase of the user's complaint in Vietnamese (e.g. "Khách hàng không scroll được page", "Page scroll bị giật ở mobile").
+        - issue_description (required) — Your one-line paraphrase of the user's complaint, ALWAYS IN ENGLISH regardless of the user's chat language (e.g. "Customer cannot scroll the page", "Scroll is laggy on mobile"). The technical team reads notes in English.
 
         - editor_link (required) — The PageFly editor URL the user actually pasted in the conversation. Take what the user sent. Do NOT invent or use a placeholder. If the user has not shared it yet, ASK them first.
 
@@ -109,7 +109,7 @@ function registerEscalateScrollIssueTool(server: McpServer): void {
         LANGUAGE OF YOUR REPLY TO THE USER
         ===========================================================
 
-        next_step_for_user is returned in Vietnamese by default. Detect the user's chat language from their recent messages. If the user is chatting in a language OTHER than Vietnamese (English, Chinese, Arabic, …), TRANSLATE next_step_for_user to that language before sending. Preserve the friendly tone, emojis, and intent — only change the language. crisp_note.content stays in its original form (it's for the TS team, not the customer).
+        next_step_for_user is already returned in the customer's language (the tool detects Vietnamese vs English from customer_last_message_text). Reply with it VERBATIM — do NOT translate it again, do NOT paraphrase. crisp_note.content is always English — it is for the TS team, not the customer.
 
         ===========================================================
         EXACT NOTE FORMAT (do not change, do not add headers, do not add cc tags)

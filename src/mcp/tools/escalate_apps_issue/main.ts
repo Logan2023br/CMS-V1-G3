@@ -53,7 +53,7 @@ function registerEscalateAppsIssueTool(server: McpServer): void {
         INPUTS
         ===========================================================
 
-        - issue_description (required) — Your one-line paraphrase of the user's complaint in Vietnamese.
+        - issue_description (required) — Your one-line paraphrase of the user's complaint, ALWAYS IN ENGLISH regardless of the user's chat language (e.g. "App bundle is not displaying on the page"). The technical team reads notes in English.
         - editor_links (required, array of URLs, ≥1) — All PageFly editor URLs the user pasted. If the user reports the issue on multiple pages, include ALL links.
         - media_urls (required, array of URLs, ≥1) — All image and/or video URLs the user pasted that show where the issue occurs. Accepts any URL host (prnt.sc, imgur, Loom, YouTube, Crisp file uploads, etc.). Do NOT verify or render the media — pass URLs through.
         - publish_status (required) — Either "published" or "only_save". Must reflect the user's actual answer to your follow-up question (Step 2 below).
@@ -89,9 +89,7 @@ function registerEscalateAppsIssueTool(server: McpServer): void {
         LANGUAGE OF YOUR REPLY TO THE USER
         ===========================================================
 
-        next_step_for_user is returned in Vietnamese by default. Detect the user's chat language from their recent messages. If the user is chatting in a language OTHER than Vietnamese (English, Chinese, Arabic, …), TRANSLATE next_step_for_user to that language before sending to the user. Preserve the friendly tone, emojis, and intent — do NOT change the meaning, just translate. Always match the customer's language.
-
-        crisp_note.content stays in its original form (Vietnamese / English) — it is for the TS team, not the customer.
+        next_step_for_user is already returned in the customer's language (the tool detects Vietnamese vs English from customer_last_message_text). Reply with it VERBATIM — do NOT translate it again, do NOT paraphrase. crisp_note.content is always English — it is for the TS team, not the customer.
 
         ===========================================================
         OUTPUT HANDLING

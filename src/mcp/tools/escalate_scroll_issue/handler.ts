@@ -7,10 +7,12 @@ import type {
   EscalateScrollOutput,
 } from "@/mcp/tools/escalate_scroll_issue/shapes.js";
 import {
-  WAIT_MESSAGE,
   TICKET_URL_FALLBACK,
+  hasVietnameseDiacritics,
   looksLikePlaceholder,
   buildTicketUrl,
+  pickMissingInfoMessage,
+  pickWaitMessage,
   tryPostNoteWithScoring,
   type PostNoteResult,
 } from "@/lib/escalation-shared.js";
@@ -21,9 +23,14 @@ import {
 
 type MissingField = "screenshot" | "editor_link";
 
-const MISSING_FIELD_LABEL: Record<MissingField, string> = {
+const MISSING_LABELS_VI: Record<MissingField, string> = {
   screenshot: "hình ảnh (screenshot)",
   editor_link: "link editor",
+};
+
+const MISSING_LABELS_EN: Record<MissingField, string> = {
+  screenshot: "a screenshot",
+  editor_link: "the editor link",
 };
 
 interface NoteFields {
@@ -34,7 +41,7 @@ interface NoteFields {
 
 function formatNoteContent(fields: NoteFields, ticketUrl: string): string {
   return (
-    `Issue: ${fields.issueDescription}, đây là hình ảnh: ${fields.screenshotUrl}\n` +
+    `Issue: ${fields.issueDescription}, screenshot: ${fields.screenshotUrl}\n` +
     `Editor: ${fields.editorLink}\n` +
     `Ticket: ${ticketUrl}`
   );
@@ -63,19 +70,19 @@ async function escalateScrollIssueHandler(
   }
 
   if (missing.length > 0) {
-    const labels = missing
-      .map((key) => MISSING_FIELD_LABEL[key])
-      .join(", ");
+    const isVi = hasVietnameseDiacritics(input.customer_last_message_text);
+    const labelDict = isVi ? MISSING_LABELS_VI : MISSING_LABELS_EN;
+    const labels = missing.map((key) => labelDict[key]).join(", ");
 
     return {
-      issue_summary: "Cần thêm thông tin trước khi escalate cho technical team.",
+      issue_summary: "Need more information before escalating to the technical team.",
       is_ready_for_escalation: false,
       missing_info: missing,
       crisp_note: {
         content: "",
         formatted_message: "",
       },
-      next_step_for_user: `Để team technical kiểm tra giúp bạn nhanh nhất, bạn vui lòng gửi giúp mình ${labels} nhé 😊 Khi có đủ thông tin, mình sẽ chuyển ngay cho team xử lý.`,
+      next_step_for_user: pickMissingInfoMessage(input.customer_last_message_text, labels),
       note_posted: false,
       note_post_error:
         "Not ready for escalation — Hugo MUST ask the user for the real screenshot URL and the real editor link, then call this tool again with the user's actual values. Do NOT fabricate placeholder URLs (no 'YOUR_STORE', no 'PAGE_ID', no 'dummyimage.com', etc.).",
@@ -119,7 +126,7 @@ async function escalateScrollIssueHandler(
       content: noteResult.noteContent,
       formatted_message: noteResult.noteContent,
     },
-    next_step_for_user: WAIT_MESSAGE,
+    next_step_for_user: pickWaitMessage(input.customer_last_message_text),
     note_posted: noteResult.posted,
     note_post_error: noteResult.error,
     session_match: noteResult.match
