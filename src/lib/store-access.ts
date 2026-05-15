@@ -5,6 +5,12 @@
 import { hasVietnameseDiacritics } from "@/lib/escalation-shared.js";
 import { stripSlackBridgePrefix } from "@/lib/anthropic.js";
 import type { CrispMeta } from "@/lib/crisp.js";
+import {
+  readCrispCreds,
+  postCrispPrivateNote,
+  fetchConversationMeta,
+  type CrispCreds,
+} from "@/lib/crisp.js";
 
 /**************************************************************************
  * CONSTANTS — customer-facing wait messages (when access pending)
@@ -67,6 +73,91 @@ function pickAccessPendingWaitMessage(customerText: string | undefined): string 
 }
 
 /**************************************************************************
+ * ORCHESTRATOR — requireStoreAccess
+ ***************************************************************************/
+
+interface AccessOutputPartial {
+  is_ready_for_escalation: false;
+  missing_info: string[];
+  crisp_note: { content: ""; formatted_message: "" };
+  next_step_for_user: string;
+  note_posted: boolean;
+  note_post_error?: string;
+}
+
+type AccessCheckResult =
+  | { ready: true }
+  | { ready: false; output: AccessOutputPartial };
+
+async function requireStoreAccess(
+  sessionId: string,
+  customerLastMessageText?: string
+): Promise<AccessCheckResult> {
+  if (!sessionId) {
+    return {
+      ready: false,
+      output: {
+        is_ready_for_escalation: false,
+        missing_info: ["store_access"],
+        crisp_note: { content: "", formatted_message: "" },
+        next_step_for_user: pickAccessPendingWaitMessage(customerLastMessageText),
+        note_posted: false,
+        note_post_error: "Missing crisp_session_id — cannot check store access.",
+      },
+    };
+  }
+
+  const creds = readCrispCreds();
+  if (!creds) {
+    return {
+      ready: false,
+      output: {
+        is_ready_for_escalation: false,
+        missing_info: ["store_access"],
+        crisp_note: { content: "", formatted_message: "" },
+        next_step_for_user: pickAccessPendingWaitMessage(customerLastMessageText),
+        note_posted: false,
+        note_post_error:
+          "Crisp API credentials not configured (set CRISP_WEBSITE_ID, CRISP_IDENTIFIER, CRISP_KEY in .env).",
+      },
+    };
+  }
+
+  // 1) Try to fetch meta. Failure or no access → fall through to @Logan path.
+  const metaResult = await fetchConversationMeta(sessionId, creds);
+  if (!metaResult.error && hasStoreAccess(metaResult.meta)) {
+    return { ready: true };
+  }
+
+  // 2) Post @Logan note to request access from TS team.
+  return requestAccessViaLogan(sessionId, creds, customerLastMessageText, metaResult.error);
+}
+
+async function requestAccessViaLogan(
+  sessionId: string,
+  creds: CrispCreds,
+  customerLastMessageText: string | undefined,
+  metaError?: string
+): Promise<AccessCheckResult> {
+  const post = await postCrispPrivateNote(sessionId, AT_LOGAN_NOTE_CONTENT, creds);
+  const errors: string[] = [];
+  if (metaError) errors.push(`meta: ${metaError}`);
+  if (!post.ok && post.error) errors.push(`note: ${post.error}`);
+
+  return {
+    ready: false,
+    output: {
+      is_ready_for_escalation: false,
+      missing_info: ["store_access"],
+      crisp_note: { content: "", formatted_message: "" },
+      next_step_for_user: pickAccessPendingWaitMessage(customerLastMessageText),
+      note_posted: post.ok,
+      note_post_error: errors.length > 0 ? errors.join(" | ") : undefined,
+    },
+  };
+}
+
+/**************************************************************************
  * EXPORTS
  ***************************************************************************/
 
@@ -79,4 +170,7 @@ export {
   hasStoreAccess,
   pickAccessPendingWaitMessage,
   matchAccessAcknowledged,
+  requireStoreAccess,
+  type AccessCheckResult,
+  type AccessOutputPartial,
 };
