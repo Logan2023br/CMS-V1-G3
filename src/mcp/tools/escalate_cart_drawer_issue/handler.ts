@@ -11,6 +11,7 @@ import {
   looksLikePlaceholder,
   pickMissingInfoMessage,
   pickWaitMessage,
+  translateIssueToEnglish,
   tryPostNoteWithScoring,
   type PostNoteResult,
 } from "@/lib/escalation-shared.js";
@@ -99,10 +100,13 @@ async function escalateCartDrawerIssueHandler(
       ? input.screenshot_url
       : undefined;
 
+  // The note (TS-facing) must always be English. Translate if Hugo passed Vietnamese.
+  const issueDescriptionEn = await translateIssueToEnglish(input.issue_description);
+
   const noteResult: PostNoteResult = await tryPostNoteWithScoring({
     hintedSessionId: input.crisp_session_id,
     fields: {
-      issueDescription: input.issue_description,
+      issueDescription: issueDescriptionEn,
       livePreviewUrl,
       editorLink,
       screenshotUrl,

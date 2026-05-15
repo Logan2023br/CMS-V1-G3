@@ -7,6 +7,7 @@ import {
   findBestSession,
   type ScoringInputs,
 } from "@/lib/scoring.js";
+import { callClaude } from "@/lib/anthropic.js";
 
 /**************************************************************************
  * CONSTANTS
@@ -47,6 +48,30 @@ function pickMissingInfoMessage(
     return `Để team technical kiểm tra giúp bạn nhanh nhất, bạn vui lòng gửi giúp mình ${labelsText} nhé 😊 Khi có đủ thông tin, mình sẽ chuyển ngay cho team xử lý.`;
   }
   return `To help our technical team check this as fast as possible, please share ${labelsText} with me 😊 Once I have all the info, I'll forward it to the team right away.`;
+}
+
+// Hugo sometimes ignores the "issue_description must be English" rule in the
+// tool description and sends Vietnamese. Auto-translate so the note posted to
+// the TS team is always English. Returns the original text on any failure so
+// the escalation never blocks on translation.
+async function translateIssueToEnglish(text: string): Promise<string> {
+  if (!hasVietnameseDiacritics(text)) return text;
+  const result = await callClaude({
+    system:
+      "You translate Vietnamese support-ticket issue descriptions to concise English. " +
+      "Output ONLY the translated English text. No preamble, no quotes, no markdown. " +
+      "Preserve technical terms exactly: 'cart drawer', 'ATC', 'bundle', 'editor', " +
+      "'page', 'preview', 'app', 'PageFly', URLs, product names. Keep it one short line.",
+    userMessage: text,
+  });
+  if (result.ok && result.text && result.text.trim().length > 0) {
+    return result.text.trim();
+  }
+  // Translation failed — fall back to original to avoid blocking escalation.
+  console.warn(
+    `[escalation] translateIssueToEnglish failed (${result.error ?? "no text"}); keeping original text.`
+  );
+  return text;
 }
 
 const PLACEHOLDER_PATTERNS: RegExp[] = [
@@ -214,6 +239,7 @@ export {
   hasVietnameseDiacritics,
   pickWaitMessage,
   pickMissingInfoMessage,
+  translateIssueToEnglish,
   tryPostNoteWithScoring,
   type SessionMatchInfo,
   type PostNoteResult,

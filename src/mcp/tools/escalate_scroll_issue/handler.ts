@@ -13,6 +13,7 @@ import {
   buildTicketUrl,
   pickMissingInfoMessage,
   pickWaitMessage,
+  translateIssueToEnglish,
   tryPostNoteWithScoring,
   type PostNoteResult,
 } from "@/lib/escalation-shared.js";
@@ -93,10 +94,13 @@ async function escalateScrollIssueHandler(
   const screenshotUrl = input.screenshot_url as string;
   const editorLink = input.editor_link as string;
 
+  // The note (TS-facing) must always be English. Translate if Hugo passed Vietnamese.
+  const issueDescriptionEn = await translateIssueToEnglish(input.issue_description);
+
   const noteResult: PostNoteResult = await tryPostNoteWithScoring({
     hintedSessionId: input.crisp_session_id,
     fields: {
-      issueDescription: input.issue_description,
+      issueDescription: issueDescriptionEn,
       screenshotUrl,
       editorLink,
     },
