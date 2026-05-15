@@ -133,6 +133,34 @@ async function callClaude(
 }
 
 /**************************************************************************
+ * ACCESS INSTRUCTIONS TRANSLATOR
+ ***************************************************************************/
+
+async function translateAccessInstructions(
+  englishInstructions: string,
+  customerMessages: CustomerMessage[]
+): Promise<{ ok: boolean; text?: string; error?: string }> {
+  const customerLines = customerMessages.length === 0
+    ? "(none — default to English)"
+    : customerMessages.map((m, i) => `${i + 1}. ${JSON.stringify(m.text)}`).join("\n");
+
+  const result = await callClaude({
+    system:
+      "You translate a customer-facing message to the customer's chat language. " +
+      "Detect the language from the customer's recent messages provided. " +
+      "Preserve URLs EXACTLY (do not shorten or change). " +
+      "Preserve technical terms like 'Shopify Dashboard', 'collaborator access', " +
+      "'notification', 'permissions'. Preserve line breaks. Keep the friendly tone. " +
+      "Output ONLY the translated message — no preamble, no quotes.",
+    userMessage:
+      `Customer's recent messages (most recent last):\n${customerLines}\n\n` +
+      `Message to translate (English source):\n${englishInstructions}`,
+  });
+
+  return result;
+}
+
+/**************************************************************************
  * EXPORTS
  ***************************************************************************/
 
@@ -143,6 +171,7 @@ export {
   hasHugoPrefix,
   stripSlackBridgePrefix,
   callClaude,
+  translateAccessInstructions,
   NOTE_TRIGGER_PREFIX,
   SYSTEM_PROMPT,
   type CustomerMessage,
