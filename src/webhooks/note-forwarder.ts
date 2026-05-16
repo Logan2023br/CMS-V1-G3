@@ -13,8 +13,13 @@ import {
   callClaude,
   parseClaudeResponse,
   stripHugoPrefix,
+  translateAccessInstructions,
   type CustomerMessage,
 } from "@/lib/anthropic.js";
+import {
+  matchAccessAcknowledged,
+  ENGLISH_ACCESS_INSTRUCTIONS,
+} from "@/lib/store-access.js";
 
 /**************************************************************************
  * EXTRACT CUSTOMER MESSAGES
@@ -76,7 +81,50 @@ async function forwardNoteToCustomer(args: ForwardArgs): Promise<void> {
   }
   const customerMessages = extractCustomerTexts(fetched.messages);
 
-  // 2) Build prompt and call Claude.
+  // 2) Special case: TS posted "Hugo: đã xin access xong" — send standard
+  //    Shopify access instructions translated to the customer's language.
+  if (matchAccessAcknowledged(noteContent)) {
+    const translation = await translateAccessInstructions(
+      ENGLISH_ACCESS_INSTRUCTIONS,
+      customerMessages
+    );
+    if (!translation.ok || !translation.text) {
+      await postCrispPrivateNote(
+        sessionId,
+        `[Hugo failed to send access instructions]: ${translation.error ?? "unknown error"}`,
+        creds
+      );
+      console.error(
+        `[note-forwarder] session=${sessionId}: access instructions translation failed: ${translation.error}`
+      );
+      return;
+    }
+
+    const sendResult = await postCrispText(sessionId, translation.text, creds);
+    if (!sendResult.ok) {
+      await postCrispPrivateNote(
+        sessionId,
+        `[Hugo failed to send access instructions to customer]: ${sendResult.error}`,
+        creds
+      );
+      console.error(
+        `[note-forwarder] session=${sessionId}: postCrispText (access) failed: ${sendResult.error}`
+      );
+      return;
+    }
+
+    await postCrispPrivateNote(
+      sessionId,
+      `[Hugo auto-replied access instructions]: ${translation.text}`,
+      creds
+    );
+    console.log(
+      `[note-forwarder] session=${sessionId}: access instructions sent (${translation.text.length} chars)`
+    );
+    return;
+  }
+
+  // 3) Build prompt and call Claude.
   const prompt = buildPrompt({
     noteContentWithoutPrefix: stripHugoPrefix(noteContent),
     customerMessages,
