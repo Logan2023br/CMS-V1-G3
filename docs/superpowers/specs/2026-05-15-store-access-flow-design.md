@@ -236,3 +236,30 @@ This stays in Vietnamese — it's for the Vietnamese TS team. No translation.
 5. `requireStoreAccess` orchestrator + tests (mocked).
 6. Webhook pattern match in `note-forwarder.ts` + tests.
 7. Manual smoke (deferred until a tool that uses this flow is built — out of scope for this feature).
+
+## Tool integration snippet (copy-paste reference)
+
+When building a new `escalate_<category>_issue` tool whose template B3 is ticked as "Cần Shopify collaborator access", add this at the top of `handler.ts`:
+
+```ts
+import { requireStoreAccess } from "@/lib/store-access.js";
+
+async function escalateXxxIssueHandler(input: EscalateXxxInput): Promise<EscalateXxxOutput> {
+  const access = await requireStoreAccess(
+    input.crisp_session_id ?? "",
+    input.customer_last_message_text
+  );
+  if (!access.ready) {
+    return {
+      issue_summary: "Need Shopify store access before escalating to the technical team.",
+      session_match: undefined,
+      ...access.output,
+    } as EscalateXxxOutput;
+  }
+  // ... existing missing-info gate + post-note flow ...
+}
+```
+
+And in `main.ts` tool description, add this paragraph in the WHAT YOU MUST DO section:
+
+> "This issue requires Shopify store access. When you call this tool, it automatically checks whether collaborator access has been granted. If not, the tool posts a private note for the TS team to request access and returns a wait message — relay `next_step_for_user` to the customer verbatim. The system handles the access flow automatically; once granted, the customer will tell you they accepted — at that point call this tool again with the same arguments to proceed."
