@@ -59,26 +59,31 @@ test("cart handler: placeholder live_preview → treated as missing", async () =
   assert.ok(out.missing_info.includes("live_preview_url"));
 });
 
-test("cart handler: next_step_for_user mentions both labels when both missing (English default)", async () => {
+test("cart handler: missing-info fallback uses English when no customer text + no Claude key", async () => {
   const out = await escalateCartDrawerIssueHandler({
     issue_description: "Cart issue",
     editor_link: undefined as unknown as string,
     live_preview_url: undefined as unknown as string,
   }, stubAccessReady);
-  // No customer_last_message_text → defaults to English.
+  // No customer_last_message_text + tests run without ANTHROPIC_API_KEY →
+  // helper falls through to English template.
   assert.match(out.next_step_for_user, /the editor link/);
   assert.match(out.next_step_for_user, /the live preview URL/);
 });
 
-test("cart handler: next_step_for_user switches to Vietnamese when customer chats Vietnamese", async () => {
+test("cart handler: missing-info fallback uses Vietnamese when customer chats Vietnamese (Claude unavailable)", async () => {
   const out = await escalateCartDrawerIssueHandler({
     issue_description: "Cart issue",
     editor_link: undefined as unknown as string,
     live_preview_url: undefined as unknown as string,
     customer_last_message_text: "Mình bị lỗi cart drawer",
   }, stubAccessReady);
-  assert.match(out.next_step_for_user, /link editor/);
-  assert.match(out.next_step_for_user, /link live preview/);
+  // Tests run without ANTHROPIC_API_KEY → falls back to VI heuristic wrapper.
+  // Labels remain English (passed through as-is in fallback). In production,
+  // Claude translates the whole reply naturally into Vietnamese.
+  assert.match(out.next_step_for_user, /the editor link/);
+  assert.match(out.next_step_for_user, /the live preview URL/);
+  assert.match(out.next_step_for_user, /vui lòng gửi giúp mình/);
 });
 
 import { formatCartNoteContent } from "./handler.ts";

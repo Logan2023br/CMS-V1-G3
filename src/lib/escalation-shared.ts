@@ -7,15 +7,17 @@ import {
   findBestSession,
   type ScoringInputs,
 } from "@/lib/scoring.js";
-import { callClaude } from "@/lib/anthropic.js";
+import { callClaude, generateCustomerReply } from "@/lib/anthropic.js";
 
 /**************************************************************************
  * CONSTANTS
  ***************************************************************************/
 
-// Customer-facing "we forwarded it, please wait" message in two languages.
-// Tool returns the appropriate variant based on whether the customer's most
-// recent message contains Vietnamese diacritics.
+// Customer-facing "we forwarded it, please wait" fallback messages. In
+// production Claude generates a reply in whatever language the customer is
+// chatting in (see generateCustomerReply). These two strings are the last-
+// resort fallback used when the Claude call fails or no API key is set —
+// the VI/EN heuristic picks one based on diacritics in customer_last_message_text.
 const WAIT_MESSAGE_VI =
   "Cảm ơn bạn đã cung cấp đầy đủ thông tin nhé 😊 Mình đã chuyển vấn đề này đến team technical để kiểm tra chi tiết. Bạn vui lòng chờ trong vài phút, team sẽ xem xét và phản hồi bạn sớm nhất có thể!";
 
@@ -36,11 +38,13 @@ function hasVietnameseDiacritics(text: string | undefined): boolean {
   return VIETNAMESE_DIACRITIC_RE.test(text);
 }
 
-function pickWaitMessage(customerText: string | undefined): string {
+// Heuristic VI/EN fallback when Claude generation fails. Used only as a
+// safety net — production path is Claude (any language).
+function fallbackWaitMessage(customerText: string | undefined): string {
   return hasVietnameseDiacritics(customerText) ? WAIT_MESSAGE_VI : WAIT_MESSAGE_EN;
 }
 
-function pickMissingInfoMessage(
+function fallbackMissingInfoMessage(
   customerText: string | undefined,
   labelsText: string
 ): string {
@@ -48,6 +52,34 @@ function pickMissingInfoMessage(
     return `Để team technical kiểm tra giúp bạn nhanh nhất, bạn vui lòng gửi giúp mình ${labelsText} nhé 😊 Khi có đủ thông tin, mình sẽ chuyển ngay cho team xử lý.`;
   }
   return `To help our technical team check this as fast as possible, please share ${labelsText} with me 😊 Once I have all the info, I'll forward it to the team right away.`;
+}
+
+async function pickWaitMessage(
+  customerText: string | undefined
+): Promise<string> {
+  const result = await generateCustomerReply({
+    intent: "wait_message",
+    customerLastMessage: customerText,
+  });
+  if (result.ok && result.text && result.text.trim().length > 0) {
+    return result.text.trim();
+  }
+  return fallbackWaitMessage(customerText);
+}
+
+async function pickMissingInfoMessage(
+  customerText: string | undefined,
+  labelsEnglish: string
+): Promise<string> {
+  const result = await generateCustomerReply({
+    intent: "missing_info",
+    customerLastMessage: customerText,
+    missingLabelsEn: labelsEnglish,
+  });
+  if (result.ok && result.text && result.text.trim().length > 0) {
+    return result.text.trim();
+  }
+  return fallbackMissingInfoMessage(customerText, labelsEnglish);
 }
 
 // Hugo sometimes ignores the "issue_description must be English" rule in the
