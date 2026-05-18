@@ -15,6 +15,7 @@ import {
   tryPostNoteWithScoring,
   type PostNoteResult,
 } from "@/lib/escalation-shared.js";
+import { requireStoreAccess } from "@/lib/store-access.js";
 
 /**************************************************************************
  * CONSTANTS
@@ -60,9 +61,30 @@ function formatCartNoteContent(fields: CartNoteFields, ticketUrl: string): strin
  * MAIN HANDLER
  ***************************************************************************/
 
+// Dependency injection seam — tests can pass a stub that returns {ready: true}
+// to exercise the missing-info gate without hitting Crisp meta API. Production
+// always uses the real shared `requireStoreAccess`.
+type AccessChecker = typeof requireStoreAccess;
+
 async function escalateCartDrawerIssueHandler(
-  input: EscalateCartDrawerInput
+  input: EscalateCartDrawerInput,
+  accessChecker: AccessChecker = requireStoreAccess
 ): Promise<EscalateCartDrawerOutput> {
+  // Check Shopify store access first. Cart drawer issues almost always
+  // need TS to debug theme code; surface the access requirement before
+  // collecting other info.
+  const access = await accessChecker(
+    input.crisp_session_id ?? "",
+    input.customer_last_message_text
+  );
+  if (!access.ready) {
+    return {
+      issue_summary: "Need Shopify store access before escalating to the technical team.",
+      session_match: undefined,
+      ...access.output,
+    } as EscalateCartDrawerOutput;
+  }
+
   const missing: MissingField[] = [];
 
   if (!input.editor_link) missing.push("editor_link");
