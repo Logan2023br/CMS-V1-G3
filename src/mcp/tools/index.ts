@@ -15,6 +15,7 @@ import { registerEscalateAppsIssueTool } from "@/mcp/tools/escalate_apps_issue/m
 import { registerEscalateAnimationIssueTool } from "@/mcp/tools/escalate_animation_issue/main.js";
 import { registerEscalatePageBrokenIssueTool } from "@/mcp/tools/escalate_page_broken_issue/main.js";
 import { registerEscalateSectionIssueTool } from "@/mcp/tools/escalate_section_issue/main.js";
+import { registerEscalateHorizontalScrollIssueTool } from "@/mcp/tools/escalate_horizontal_scroll_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -33,6 +34,7 @@ function registerTools(server: McpServer): void {
   registerEscalateAnimationIssueTool(server);
   registerEscalatePageBrokenIssueTool(server);
   registerEscalateSectionIssueTool(server);
+  registerEscalateHorizontalScrollIssueTool(server);
 }
 
 /**************************************************************************
