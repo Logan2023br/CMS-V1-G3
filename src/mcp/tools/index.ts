@@ -19,6 +19,7 @@ import { registerEscalateHorizontalScrollIssueTool } from "@/mcp/tools/escalate_
 import { registerEscalateThemeOverrideIssueTool } from "@/mcp/tools/escalate_theme_override_issue/main.js";
 import { registerEscalateSpeedPageIssueTool } from "@/mcp/tools/escalate_speed_page_issue/main.js";
 import { registerEscalateScrollSectionIssueTool } from "@/mcp/tools/escalate_scroll_section_issue/main.js";
+import { registerEscalateStickyIssueTool } from "@/mcp/tools/escalate_sticky_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -41,6 +42,7 @@ function registerTools(server: McpServer): void {
   registerEscalateThemeOverrideIssueTool(server);
   registerEscalateSpeedPageIssueTool(server);
   registerEscalateScrollSectionIssueTool(server);
+  registerEscalateStickyIssueTool(server);
 }
 
 /**************************************************************************
