@@ -1,0 +1,113 @@
+/**************************************************************************
+ * IMPORTS
+ ***************************************************************************/
+
+import { escalateApiIntegrationIssueHandler } from "@/mcp/tools/escalate_api_integration_issue/handler.js";
+import {
+  ESCALATE_API_INTEGRATION_INPUT_SHAPE,
+  ESCALATE_API_INTEGRATION_OUTPUT_SHAPE,
+} from "@/mcp/tools/escalate_api_integration_issue/shapes.js";
+
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type {
+  EscalateApiIntegrationInput,
+  EscalateApiIntegrationOutput,
+} from "@/mcp/tools/escalate_api_integration_issue/shapes.js";
+
+/**************************************************************************
+ * TOOL REGISTRATION
+ ***************************************************************************/
+
+function registerEscalateApiIntegrationIssueTool(server: McpServer): void {
+  server.registerTool(
+    "escalate_api_integration_issue",
+    {
+      title: "Escalate PageFly API / integration request to technical team",
+      description: `
+        Call this tool ONLY when the customer asks about PageFly providing an API or integrating with their own app/API, AND the customer is not satisfied with the standard answer in STEP 1. Common phrasings:
+          - "Có thể publish API để tôi sử dụng không?"
+          - "Tôi build app và cần API của bạn"
+          - "Có thể tích hợp với API của bạn không?"
+          - "Does PageFly have an API?"
+          - "Can I integrate with PageFly's API?"
+
+        ===========================================================
+        ABSOLUTE RULE — READ THIS FIRST
+        ===========================================================
+
+        DO NOT call this tool until you have given the customer the STEP 1 standard answer AND the customer has pushed back / not accepted it. If the customer accepts the standard answer, no escalation is needed — close the conversation politely.
+
+        ===========================================================
+        INPUTS
+        ===========================================================
+
+        - issue_description (required) — One-line English paraphrase of the request, noting the customer did not accept the standard reply. Example: "Customer asks if PageFly can publish/integrate an API for their app; standard reply did not satisfy, requesting technical review."
+        - ticket_url (optional)
+        - crisp_session_id (optional but STRONGLY recommended)
+        - customer_last_message_text (optional but STRONGLY recommended) — Verbatim user message.
+
+        This tool does NOT collect editor_link, screenshots, publish_status, or editor-exit confirmation. No Shopify access is required either.
+
+        ===========================================================
+        WHAT YOU MUST DO
+        ===========================================================
+
+        STEP 1 — STANDARD ANSWER. Reply with the canonical PageFly response to API requests:
+
+        "Hiện tại PageFly là app tích hợp với Shopify nên không thể cung cấp API cho khách hàng. Ngoài ra điều này cũng liên quan đến vấn đề bảo mật, hy vọng bạn có thể thông cảm."
+
+        IF the customer accepts the answer → do NOT call this tool. Close politely.
+        IF the customer pushes back / asks again / is unhappy → proceed to STEP 2.
+
+        STEP 2 — Call escalate_api_integration_issue with: issue_description (English, noting the standard answer did not satisfy). Include ticket_url and crisp_session_id if available. ALWAYS include customer_last_message_text.
+
+        Inspect the response:
+        - note_posted === true → reply with next_step_for_user verbatim. Do NOT post the note yourself.
+        - note_posted === false → reply with next_step_for_user. If you can post a Crisp private note natively, post crisp_note.content. note_post_error explains why.
+
+        ===========================================================
+        OUTPUT HANDLING
+        ===========================================================
+
+        - is_ready_for_escalation will be true as long as issue_description is provided (no other gates).
+        - note_posted === true → tool posted the note. Just reply with next_step_for_user.
+        - note_posted === false → reply with next_step_for_user, and post crisp_note.content if you can.
+
+        ===========================================================
+        LANGUAGE OF YOUR REPLY TO THE USER
+        ===========================================================
+
+        next_step_for_user is already in the customer's language. Reply with it VERBATIM. The STEP 1 standard answer is in Vietnamese as default; adapt to the customer's language naturally. crisp_note.content is always English — for the TS team.
+
+        ===========================================================
+        EXACT NOTE FORMAT (do not change)
+        ===========================================================
+
+        Issue: <issue_description>
+        Ticket: <ticket_url or "(unknown)" if omitted>
+
+        Note has only TWO lines — no editor, no screenshot, no publish status (this tool does not collect them).
+      `,
+      inputSchema: ESCALATE_API_INTEGRATION_INPUT_SHAPE,
+      outputSchema: ESCALATE_API_INTEGRATION_OUTPUT_SHAPE,
+    },
+    async (input: EscalateApiIntegrationInput) => {
+      const output: EscalateApiIntegrationOutput = await escalateApiIntegrationIssueHandler(input);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2),
+          },
+        ],
+        structuredContent: output,
+      };
+    }
+  );
+}
+
+/**************************************************************************
+ * EXPORTS
+ ***************************************************************************/
+
+export { registerEscalateApiIntegrationIssueTool };
