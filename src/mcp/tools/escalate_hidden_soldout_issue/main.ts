@@ -1,0 +1,137 @@
+/**************************************************************************
+ * IMPORTS
+ ***************************************************************************/
+
+import { escalateHiddenSoldoutIssueHandler } from "@/mcp/tools/escalate_hidden_soldout_issue/handler.js";
+import {
+  ESCALATE_HIDDEN_SOLDOUT_INPUT_SHAPE,
+  ESCALATE_HIDDEN_SOLDOUT_OUTPUT_SHAPE,
+} from "@/mcp/tools/escalate_hidden_soldout_issue/shapes.js";
+
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type {
+  EscalateHiddenSoldoutInput,
+  EscalateHiddenSoldoutOutput,
+} from "@/mcp/tools/escalate_hidden_soldout_issue/shapes.js";
+
+/**************************************************************************
+ * TOOL REGISTRATION
+ ***************************************************************************/
+
+function registerEscalateHiddenSoldoutIssueTool(server: McpServer): void {
+  server.registerTool(
+    "escalate_hidden_soldout_issue",
+    {
+      title: "Escalate request to hide sold-out variants on a PageFly page",
+      description: `
+        Call this tool when the user asks to hide sold-out variants on a PageFly product page. Common phrasings:
+          - "Muốn ẩn variant sold out"
+          - "Làm sao để ẩn variant đã hết hàng"
+          - "Hide sold-out variants on product page"
+          - Any request to hide / disable / remove sold-out variants from product display.
+
+        ===========================================================
+        ABSOLUTE RULE — READ THIS FIRST
+        ===========================================================
+
+        DO NOT call this tool until:
+          1. You have given the STEP 1 explanation AND the user has agreed to the free custom-code solution, AND
+          2. You have a real editor link the user actually pasted, AND
+          3. The user has explicitly said yes to publishing the page after the fix, AND
+          4. The user has confirmed they have exited the PageFly editor.
+
+        NEVER fabricate or substitute placeholder URLs. Server-side validation will REJECT placeholders.
+
+        ===========================================================
+        STORE ACCESS — AUTOMATICALLY HANDLED
+        ===========================================================
+
+        Tool automatically checks Shopify store access. If access not granted → posts @Logan note + returns wait message in customer's language. Relay verbatim and call again after the customer confirms access granted.
+
+        ===========================================================
+        INPUTS
+        ===========================================================
+
+        - issue_description (required) — One-line English paraphrase. Mention the customer agreed to the free custom-code solution. Example: "Customer wants to hide sold-out variants on product page; agreed to free custom-code solution."
+        - editor_link (required) — PageFly editor URL the user pasted.
+        - screenshot_urls (optional array) — URLs the user pasted showing the variants they want to hide (screenshot of product page).
+        - customer_attached_files (optional boolean) — TRUE if user attached files directly in chat instead of pasting links.
+        - user_consented_to_publish (required) — Boolean. Must be TRUE.
+        - user_exited_editor (required) — Boolean. Must be TRUE before the tool can escalate.
+        - ticket_url (optional)
+        - crisp_session_id (optional but STRONGLY recommended)
+        - customer_last_message_text (optional but STRONGLY recommended) — Verbatim user message.
+
+        ===========================================================
+        WHAT YOU MUST DO
+        ===========================================================
+
+        STEP 1 — INFORM + GET CONSENT. The "hide sold-out variants" feature is not built-in to PageFly — it requires custom code. The technical team adds this for free. Reply to the customer to explain and get their agreement:
+
+        "Nếu bạn muốn ẩn các variant sold out trên PageFly, chức năng này hiện không có sẵn và sẽ cần custom code. Tuy nhiên chúng tôi có thể add code hỗ trợ bạn miễn phí và không tốn bất kỳ chi phí nào. Bạn có đồng ý không?"
+
+        IF customer says NO → do not escalate. Acknowledge their answer and close politely.
+        IF customer says YES → proceed to STEP 2.
+
+        STEP 2 — Collect:
+        a) Editor link of the affected page. Ask: "Bạn gửi mình link editor của trang sản phẩm đang muốn ẩn variant sold-out nhé."
+        b) Evidence (OPTIONAL but helpful): "Nếu được, bạn gửi mình ảnh chụp hoặc đính kèm hình các variant đang sold-out mà bạn muốn ẩn để team tham khảo — bạn có thể paste link hoặc đính kèm file trực tiếp trong chat cũng được."
+        c) Publish consent: "Khi team kỹ thuật fix xong, mình publish luôn trang lên cho bạn nhé? (cần publish để áp dụng fix)"
+
+        STEP 3 — Have editor_link + user said YES to publish. BEFORE calling the tool, ask the customer to EXIT the editor and WAIT for explicit confirmation:
+        Reply: "Vui lòng giúp chúng tôi thoát editor để Technical team truy cập và check giúp bạn, vì nếu bạn và chúng tôi trong 1 editor sẽ bị conflict và không thể lưu version mới nhất"
+
+        STEP 4 — After the customer has explicitly confirmed they have exited the editor:
+        a) Call escalate_hidden_soldout_issue with: issue_description (English, mention free custom-code solution), editor_link, user_consented_to_publish=true, user_exited_editor=true. If user pasted screenshot URLs include them in screenshot_urls. If user attached files in chat set customer_attached_files=true. ALWAYS include customer_last_message_text.
+        b) Inspect the response:
+           - If is_ready_for_escalation === false AND missing_info contains "store_access" → relay next_step_for_user verbatim. Wait for the customer to confirm access has been granted, then call again.
+           - If is_ready_for_escalation === false AND missing_info contains "editor_exit" → relay next_step_for_user verbatim. Wait for the customer to confirm they've exited, then call again with user_exited_editor=true.
+           - If note_posted === true → reply with next_step_for_user verbatim.
+           - If note_posted === false → reply with next_step_for_user. If you can post a Crisp private note natively, post crisp_note.content. note_post_error explains why.
+
+        ===========================================================
+        OUTPUT HANDLING
+        ===========================================================
+
+        - is_ready_for_escalation === false → Do NOT post any note. Ask the user for what is listed in missing_info, using next_step_for_user as your reply.
+        - is_ready_for_escalation === true AND note_posted === true → Tool already posted. Reply with next_step_for_user.
+        - is_ready_for_escalation === true AND note_posted === false → Reply with next_step_for_user. If you can post a Crisp private note natively, post crisp_note.content unchanged.
+
+        ===========================================================
+        LANGUAGE OF YOUR REPLY TO THE USER
+        ===========================================================
+
+        next_step_for_user is already in the customer's language. Reply with it VERBATIM. The STEP 1 explanation script above is in Vietnamese as default; adapt to the customer's language naturally while preserving the offer that the custom code is FREE. crisp_note.content is always English — for the TS team.
+
+        ===========================================================
+        EXACT NOTE FORMAT (do not change)
+        ===========================================================
+
+        Issue: <issue_description>[, screenshot: <urls or "customer attached files in ticket">]
+        Editor: <editor_link>
+        Ticket: <ticket_url or "(unknown)" if omitted>
+        Allowed to publish (user consented)
+      `,
+      inputSchema: ESCALATE_HIDDEN_SOLDOUT_INPUT_SHAPE,
+      outputSchema: ESCALATE_HIDDEN_SOLDOUT_OUTPUT_SHAPE,
+    },
+    async (input: EscalateHiddenSoldoutInput) => {
+      const output: EscalateHiddenSoldoutOutput = await escalateHiddenSoldoutIssueHandler(input);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2),
+          },
+        ],
+        structuredContent: output,
+      };
+    }
+  );
+}
+
+/**************************************************************************
+ * EXPORTS
+ ***************************************************************************/
+
+export { registerEscalateHiddenSoldoutIssueTool };
