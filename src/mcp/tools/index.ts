@@ -30,6 +30,7 @@ import { registerEscalatePartnerIssueTool } from "@/mcp/tools/escalate_partner_i
 import { registerEscalateVariantAbTestingIssueTool } from "@/mcp/tools/escalate_variant_abtesting_issue/main.js";
 import { registerEscalateOverrideSectionThemeIssueTool } from "@/mcp/tools/escalate_override_section_theme_issue/main.js";
 import { registerEscalatePublishLiquidErrorIssueTool } from "@/mcp/tools/escalate_publish_liquid_error_issue/main.js";
+import { registerEscalateWhitePageIssueTool } from "@/mcp/tools/escalate_white_page_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -63,6 +64,7 @@ function registerTools(server: McpServer): void {
   registerEscalateVariantAbTestingIssueTool(server);
   registerEscalateOverrideSectionThemeIssueTool(server);
   registerEscalatePublishLiquidErrorIssueTool(server);
+  registerEscalateWhitePageIssueTool(server);
 }
 
 /**************************************************************************
