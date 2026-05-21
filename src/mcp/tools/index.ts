@@ -34,6 +34,7 @@ import { registerEscalateWhitePageIssueTool } from "@/mcp/tools/escalate_white_p
 import { registerEscalateLiveDifferentEditorIssueTool } from "@/mcp/tools/escalate_live_different_editor_issue/main.js";
 import { registerEscalateElementNotworkingIssueTool } from "@/mcp/tools/escalate_element_notworking_issue/main.js";
 import { registerEscalateRedirectCheckoutIssueTool } from "@/mcp/tools/escalate_redirect_checkout_issue/main.js";
+import { registerEscalatePopupErrorIssueTool } from "@/mcp/tools/escalate_popup_error_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -71,6 +72,7 @@ function registerTools(server: McpServer): void {
   registerEscalateLiveDifferentEditorIssueTool(server);
   registerEscalateElementNotworkingIssueTool(server);
   registerEscalateRedirectCheckoutIssueTool(server);
+  registerEscalatePopupErrorIssueTool(server);
 }
 
 /**************************************************************************
