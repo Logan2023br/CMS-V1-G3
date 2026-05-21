@@ -21,6 +21,7 @@ import { registerEscalateSpeedPageIssueTool } from "@/mcp/tools/escalate_speed_p
 import { registerEscalateScrollSectionIssueTool } from "@/mcp/tools/escalate_scroll_section_issue/main.js";
 import { registerEscalateStickyIssueTool } from "@/mcp/tools/escalate_sticky_issue/main.js";
 import { registerEscalateHiddenSoldoutIssueTool } from "@/mcp/tools/escalate_hidden_soldout_issue/main.js";
+import { registerEscalateUploadImageIssueTool } from "@/mcp/tools/escalate_upload_image_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -45,6 +46,7 @@ function registerTools(server: McpServer): void {
   registerEscalateScrollSectionIssueTool(server);
   registerEscalateStickyIssueTool(server);
   registerEscalateHiddenSoldoutIssueTool(server);
+  registerEscalateUploadImageIssueTool(server);
 }
 
 /**************************************************************************
