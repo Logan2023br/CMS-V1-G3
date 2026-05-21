@@ -22,6 +22,7 @@ import { registerEscalateScrollSectionIssueTool } from "@/mcp/tools/escalate_scr
 import { registerEscalateStickyIssueTool } from "@/mcp/tools/escalate_sticky_issue/main.js";
 import { registerEscalateHiddenSoldoutIssueTool } from "@/mcp/tools/escalate_hidden_soldout_issue/main.js";
 import { registerEscalateUploadImageIssueTool } from "@/mcp/tools/escalate_upload_image_issue/main.js";
+import { registerEscalateMissImageIssueTool } from "@/mcp/tools/escalate_miss_image_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -47,6 +48,7 @@ function registerTools(server: McpServer): void {
   registerEscalateStickyIssueTool(server);
   registerEscalateHiddenSoldoutIssueTool(server);
   registerEscalateUploadImageIssueTool(server);
+  registerEscalateMissImageIssueTool(server);
 }
 
 /**************************************************************************
