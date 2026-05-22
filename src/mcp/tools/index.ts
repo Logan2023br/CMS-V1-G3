@@ -40,6 +40,7 @@ import { registerEscalateEventButtonIssueTool } from "@/mcp/tools/escalate_event
 import { registerEscalateFormIssueTool } from "@/mcp/tools/escalate_form_issue/main.js";
 import { registerEscalateDuplicateWidgetIssueTool } from "@/mcp/tools/escalate_duplicate_widget_issue/main.js";
 import { registerEscalateRemoveSpaceIssueTool } from "@/mcp/tools/escalate_remove_space_issue/main.js";
+import { registerEscalateAppErrorPositionIssueTool } from "@/mcp/tools/escalate_app_error_position_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -83,6 +84,7 @@ function registerTools(server: McpServer): void {
   registerEscalateFormIssueTool(server);
   registerEscalateDuplicateWidgetIssueTool(server);
   registerEscalateRemoveSpaceIssueTool(server);
+  registerEscalateAppErrorPositionIssueTool(server);
 }
 
 /**************************************************************************
