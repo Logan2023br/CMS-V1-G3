@@ -61,6 +61,7 @@ import { registerEscalateHeaderFooterIssueTool } from "@/mcp/tools/escalate_head
 import { registerEscalateUnderlineIssueTool } from "@/mcp/tools/escalate_underline_issue/main.js";
 import { registerEscalateHerobannerIssueTool } from "@/mcp/tools/escalate_herobanner_issue/main.js";
 import { registerEscalateEditLayoutIssueTool } from "@/mcp/tools/escalate_edit_layout_issue/main.js";
+import { registerEscalateEditLayoutBundleIssueTool } from "@/mcp/tools/escalate_edit_layout_bundle_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -125,6 +126,7 @@ function registerTools(server: McpServer): void {
   registerEscalateUnderlineIssueTool(server);
   registerEscalateHerobannerIssueTool(server);
   registerEscalateEditLayoutIssueTool(server);
+  registerEscalateEditLayoutBundleIssueTool(server);
 }
 
 /**************************************************************************
