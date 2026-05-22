@@ -51,6 +51,7 @@ import { registerEscalateProductNotAssignIssueTool } from "@/mcp/tools/escalate_
 import { registerEscalateComparePriceIssueTool } from "@/mcp/tools/escalate_compare_price_issue/main.js";
 import { registerEscalateBadgeIssueTool } from "@/mcp/tools/escalate_badge_issue/main.js";
 import { registerEscalateApiFeatureIssueTool } from "@/mcp/tools/escalate_api_feature_issue/main.js";
+import { registerEscalatePageflyAnalyticsIssueTool } from "@/mcp/tools/escalate_pagefly_analytics_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -105,6 +106,7 @@ function registerTools(server: McpServer): void {
   registerEscalateComparePriceIssueTool(server);
   registerEscalateBadgeIssueTool(server);
   registerEscalateApiFeatureIssueTool(server);
+  registerEscalatePageflyAnalyticsIssueTool(server);
 }
 
 /**************************************************************************
