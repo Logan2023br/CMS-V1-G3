@@ -1,0 +1,136 @@
+/**************************************************************************
+ * IMPORTS
+ ***************************************************************************/
+
+import { escalateGtmIssueHandler } from "@/mcp/tools/escalate_gtm_issue/handler.js";
+import {
+  ESCALATE_GTM_INPUT_SHAPE,
+  ESCALATE_GTM_OUTPUT_SHAPE,
+} from "@/mcp/tools/escalate_gtm_issue/shapes.js";
+
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type {
+  EscalateGtmInput,
+  EscalateGtmOutput,
+} from "@/mcp/tools/escalate_gtm_issue/shapes.js";
+
+/**************************************************************************
+ * TOOL REGISTRATION
+ ***************************************************************************/
+
+function registerEscalateGtmIssueTool(server: McpServer): void {
+  server.registerTool(
+    "escalate_gtm_issue",
+    {
+      title: "Escalate Google Tag Manager (GTM) tracking issues on PageFly pages",
+      description: `
+        Call this tool when the customer asks about Google Tag Manager (GTM) tracking on PageFly pages or reports GTM not working on a PageFly page. Common phrasings:
+          - "Sử dụng GTM tracking PageFly page"
+          - "Đã add code GTM nhưng không track được dữ liệu của PageFly"
+          - "Làm sao để dùng GTM tracking button của PageFly"
+          - "GTM debug shows no events on PageFly page"
+          - "How to add GTM trigger for PageFly button"
+          - "GTM container installed but PageFly events missing"
+
+        ===========================================================
+        ABSOLUTE RULE — READ THIS FIRST
+        ===========================================================
+
+        DO NOT call this tool until:
+          1. You have a detailed description of WHAT the customer wants to track (button click / page view / custom event), WHAT they already set up, and WHAT is not working (into issue_description), AND
+          2. The user has explicitly confirmed they have exited the PageFly editor.
+
+        editor_link and screenshot are OPTIONAL — include them if the customer provides them, do not block escalation on them. NO publish status (GTM is configured at store level, not page level).
+
+        NEVER fabricate placeholder URLs.
+
+        ===========================================================
+        STORE ACCESS — AUTOMATICALLY HANDLED
+        ===========================================================
+
+        Tool automatically checks Shopify store access. If access not granted → posts @Logan note + returns wait message in customer's language. Relay verbatim and call again after the customer confirms access granted.
+
+        ===========================================================
+        INPUTS
+        ===========================================================
+
+        - issue_description (required) — Detailed English paraphrase. MUST include: (a) what customer wants to track, (b) what they already set up (GTM container ID, code location), (c) what's not working. Example: "Customer added GTM code in PageFly Custom HTML element but GTM debug shows no events firing on PageFly page.", "Customer wants to track click events on PageFly Buy Now button via GTM trigger; needs button selector / data-attributes."
+        - editor_link (optional) — PageFly editor URL of the page involved, if customer provides it.
+        - screenshot_urls (optional array) — URLs the customer pasted (GTM container, debug view, code snippet, ...). Helpful but not required.
+        - customer_attached_files (optional boolean) — TRUE if customer attached files in chat.
+        - user_exited_editor (required) — Boolean. Must be TRUE before the tool can escalate.
+        - ticket_url (optional)
+        - crisp_session_id (optional but STRONGLY recommended)
+        - customer_last_message_text (optional but STRONGLY recommended) — Verbatim user message.
+
+        ===========================================================
+        WHAT YOU MUST DO
+        ===========================================================
+
+        STEP 1 — ACKNOWLEDGE. There is no customer-side self-help; technical team must inspect GTM setup, container code placement, and PageFly element selectors. Reply:
+        "Issue về GTM tracking trên PageFly page này cần team kỹ thuật kiểm tra và hỗ trợ cho bạn. Mình sẽ chuyển ticket sang team để các bạn xử lý. Trước đó, cho mình xin thêm vài thông tin nhé."
+
+        STEP 2 — Collect:
+        a) Detailed description. Ask: "Bạn mô tả rõ giúp mình:
+           1) Bạn muốn track gì (button click nào, page view, sự kiện custom...)?
+           2) Bạn đã set up gì rồi (GTM Container ID, đặt code ở đâu — theme.liquid, PageFly Custom HTML, ...)?
+           3) Hiện tại đang không hoạt động ra sao (GTM debug không thấy event / Analytics không nhận data / ...)?"
+        b) (OPTIONAL) Editor link: "Nếu được, bạn gửi mình link editor của trang đang muốn track nhé."
+        c) (OPTIONAL) Visual evidence: "Nếu tiện, bạn gửi mình ảnh chụp GTM container hoặc debug view — có thể paste link hoặc đính kèm file trong chat."
+
+        STEP 3 — Have a detailed description. BEFORE calling the tool, ask the customer to EXIT the editor and WAIT for explicit confirmation:
+        Reply: "Vui lòng giúp chúng tôi thoát editor để Technical team truy cập và check giúp bạn, vì nếu bạn và chúng tôi trong 1 editor sẽ bị conflict và không thể lưu version mới nhất"
+
+        STEP 4 — After the customer has explicitly confirmed they have exited the editor:
+        a) Call escalate_gtm_issue with: issue_description (English; MUST cover the 3 things from STEP 2a), editor_link (if customer provided), screenshot_urls (if pasted) OR customer_attached_files=true (if attached), user_exited_editor=true. ALWAYS include customer_last_message_text.
+        b) Inspect the response:
+           - If is_ready_for_escalation === false AND missing_info contains "store_access" → relay next_step_for_user verbatim. Wait for the customer to confirm access has been granted, then call again.
+           - If is_ready_for_escalation === false AND missing_info contains "editor_exit" → relay next_step_for_user verbatim. Wait for the customer to confirm they've exited, then call again with user_exited_editor=true.
+           - If note_posted === true → reply with next_step_for_user verbatim.
+           - If note_posted === false → reply with next_step_for_user. If you can post a Crisp private note natively, post crisp_note.content. note_post_error explains why.
+
+        ===========================================================
+        OUTPUT HANDLING
+        ===========================================================
+
+        - is_ready_for_escalation === false → Do NOT post any note. Ask the user for what is listed in missing_info, using next_step_for_user as your reply.
+        - is_ready_for_escalation === true AND note_posted === true → Tool already posted. Reply with next_step_for_user.
+        - is_ready_for_escalation === true AND note_posted === false → Reply with next_step_for_user. If you can post a Crisp private note natively, post crisp_note.content unchanged.
+
+        ===========================================================
+        LANGUAGE OF YOUR REPLY TO THE USER
+        ===========================================================
+
+        next_step_for_user is already in the customer's language. Reply with it VERBATIM. The STEP scripts above are in Vietnamese as default; adapt to the customer's language naturally. crisp_note.content is always English — for the TS team.
+
+        ===========================================================
+        EXACT NOTE FORMAT (do not change)
+        ===========================================================
+
+        Issue: <issue_description>[, screenshot: <urls or "customer attached files in ticket">]
+        [Editor: <editor_link> — only if customer provided]
+        Ticket: <ticket_url or "(unknown)" if omitted>
+      `,
+      inputSchema: ESCALATE_GTM_INPUT_SHAPE,
+      outputSchema: ESCALATE_GTM_OUTPUT_SHAPE,
+    },
+    async (input: EscalateGtmInput) => {
+      const output: EscalateGtmOutput = await escalateGtmIssueHandler(input);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2),
+          },
+        ],
+        structuredContent: output,
+      };
+    }
+  );
+}
+
+/**************************************************************************
+ * EXPORTS
+ ***************************************************************************/
+
+export { registerEscalateGtmIssueTool };

@@ -53,6 +53,7 @@ import { registerEscalateBadgeIssueTool } from "@/mcp/tools/escalate_badge_issue
 import { registerEscalateApiFeatureIssueTool } from "@/mcp/tools/escalate_api_feature_issue/main.js";
 import { registerEscalatePageflyAnalyticsIssueTool } from "@/mcp/tools/escalate_pagefly_analytics_issue/main.js";
 import { registerEscalateAbTestingIssueTool } from "@/mcp/tools/escalate_ab_testing_issue/main.js";
+import { registerEscalateGtmIssueTool } from "@/mcp/tools/escalate_gtm_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -109,6 +110,7 @@ function registerTools(server: McpServer): void {
   registerEscalateApiFeatureIssueTool(server);
   registerEscalatePageflyAnalyticsIssueTool(server);
   registerEscalateAbTestingIssueTool(server);
+  registerEscalateGtmIssueTool(server);
 }
 
 /**************************************************************************
