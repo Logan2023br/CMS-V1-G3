@@ -45,6 +45,7 @@ import { registerEscalateSchemaPageflyIssueTool } from "@/mcp/tools/escalate_sch
 import { registerEscalateAnimationBrokenIssueTool } from "@/mcp/tools/escalate_animation_broken_issue/main.js";
 import { registerEscalateJsPageflyIssueTool } from "@/mcp/tools/escalate_js_pagefly_issue/main.js";
 import { registerEscalateVideoNotAutoIssueTool } from "@/mcp/tools/escalate_video_not_auto_issue/main.js";
+import { registerEscalateElementNotShowIssueTool } from "@/mcp/tools/escalate_element_not_show_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -93,6 +94,7 @@ function registerTools(server: McpServer): void {
   registerEscalateAnimationBrokenIssueTool(server);
   registerEscalateJsPageflyIssueTool(server);
   registerEscalateVideoNotAutoIssueTool(server);
+  registerEscalateElementNotShowIssueTool(server);
 }
 
 /**************************************************************************
