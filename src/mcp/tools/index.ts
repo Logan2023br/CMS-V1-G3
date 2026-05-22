@@ -55,6 +55,7 @@ import { registerEscalatePageflyAnalyticsIssueTool } from "@/mcp/tools/escalate_
 import { registerEscalateAbTestingIssueTool } from "@/mcp/tools/escalate_ab_testing_issue/main.js";
 import { registerEscalateGtmIssueTool } from "@/mcp/tools/escalate_gtm_issue/main.js";
 import { registerEscalateSeoToolIssueTool } from "@/mcp/tools/escalate_seo_tool_issue/main.js";
+import { registerEscalateSourceRevertIssueTool } from "@/mcp/tools/escalate_source_revert_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -113,6 +114,7 @@ function registerTools(server: McpServer): void {
   registerEscalateAbTestingIssueTool(server);
   registerEscalateGtmIssueTool(server);
   registerEscalateSeoToolIssueTool(server);
+  registerEscalateSourceRevertIssueTool(server);
 }
 
 /**************************************************************************
