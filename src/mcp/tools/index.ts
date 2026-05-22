@@ -42,6 +42,7 @@ import { registerEscalateDuplicateWidgetIssueTool } from "@/mcp/tools/escalate_d
 import { registerEscalateRemoveSpaceIssueTool } from "@/mcp/tools/escalate_remove_space_issue/main.js";
 import { registerEscalateAppErrorPositionIssueTool } from "@/mcp/tools/escalate_app_error_position_issue/main.js";
 import { registerEscalateSchemaPageflyIssueTool } from "@/mcp/tools/escalate_schema_pagefly_issue/main.js";
+import { registerEscalateAnimationBrokenIssueTool } from "@/mcp/tools/escalate_animation_broken_issue/main.js";
 
 /**************************************************************************
  * MAIN
@@ -87,6 +88,7 @@ function registerTools(server: McpServer): void {
   registerEscalateRemoveSpaceIssueTool(server);
   registerEscalateAppErrorPositionIssueTool(server);
   registerEscalateSchemaPageflyIssueTool(server);
+  registerEscalateAnimationBrokenIssueTool(server);
 }
 
 /**************************************************************************
