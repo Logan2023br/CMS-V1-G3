@@ -69,6 +69,7 @@ function registerEscalatePageflyAnalyticsIssueTool(server: McpServer): void {
         - ticket_url (optional)
         - crisp_session_id (optional but STRONGLY recommended)
         - customer_last_message_text (optional but STRONGLY recommended) — Verbatim user message.
+        - customer_homepage_url (optional URL) — Customer's Shopify store homepage. REQUIRED to be present when escalation needs store access; if missing the tool returns 'customer_homepage_url' in missing_info and Hugo must ask the customer.
 
         ===========================================================
         WHAT YOU MUST DO
@@ -84,6 +85,7 @@ function registerEscalatePageflyAnalyticsIssueTool(server: McpServer): void {
         STEP 3 — Call escalate_pagefly_analytics_issue with: issue_description (English; MUST classify symptom), screenshot_urls (if pasted) OR customer_attached_files=true (if attached). ALWAYS include customer_last_message_text.
 
         STEP 4 — Inspect the response:
+           - If is_ready_for_escalation === false AND missing_info contains "customer_homepage_url" → relay next_step_for_user verbatim (asks the customer for their store homepage URL). After the customer sends their homepage URL, call again with customer_homepage_url=that URL.
            - If is_ready_for_escalation === false AND missing_info contains "store_access" → relay next_step_for_user verbatim. Wait for the customer to confirm access has been granted, then call again.
            - If is_ready_for_escalation === false AND missing_info contains "screenshot" → relay next_step_for_user, collect screenshot, call again.
            - If note_posted === true → reply with next_step_for_user verbatim.

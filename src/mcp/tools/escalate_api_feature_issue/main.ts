@@ -77,6 +77,7 @@ function registerEscalateApiFeatureIssueTool(server: McpServer): void {
         - ticket_url (optional)
         - crisp_session_id (optional but STRONGLY recommended)
         - customer_last_message_text (optional but STRONGLY recommended) — Verbatim user message.
+        - customer_homepage_url (optional URL) — Customer's Shopify store homepage. REQUIRED to be present when escalation needs store access; if missing the tool returns 'customer_homepage_url' in missing_info and Hugo must ask the customer.
 
         ===========================================================
         WHAT YOU MUST DO

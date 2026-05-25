@@ -82,7 +82,8 @@ async function escalateUnderlineIssueHandler(
 ): Promise<EscalateUnderlineOutput> {
   const access = await accessChecker(
     input.crisp_session_id ?? "",
-    input.customer_last_message_text
+    input.customer_last_message_text,
+    input.customer_homepage_url
   );
   if (!access.ready) {
     return {

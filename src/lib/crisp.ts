@@ -73,7 +73,8 @@ function verifyHmacSignature(
 async function postCrispPrivateNote(
   sessionId: string,
   content: string,
-  creds: CrispCreds
+  creds: CrispCreds,
+  mentions?: string[]
 ): Promise<{ ok: boolean; error?: string }> {
   const url = `https://api.crisp.chat/v1/website/${creds.websiteId}/conversation/${sessionId}/message`;
   const noteUser = readNoteUser();
@@ -85,6 +86,7 @@ async function postCrispPrivateNote(
     content,
   };
   if (noteUser) body.user = noteUser;
+  if (mentions && mentions.length > 0) body.mentions = mentions;
 
   try {
     const response = await fetch(url, {

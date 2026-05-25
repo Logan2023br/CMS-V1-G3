@@ -86,7 +86,8 @@ async function escalateAnimationIssueHandler(
   // recreate the effect in the live store. Surface access requirement first.
   const access = await accessChecker(
     input.crisp_session_id ?? "",
-    input.customer_last_message_text
+    input.customer_last_message_text,
+    input.customer_homepage_url
   );
   if (!access.ready) {
     return {

@@ -168,7 +168,8 @@ type CustomerReplyIntent =
   | "missing_info"
   | "wait_message"
   | "access_pending"
-  | "editor_exit";
+  | "editor_exit"
+  | "ask_homepage";
 
 interface GenerateCustomerReplyArgs {
   intent: CustomerReplyIntent;
@@ -206,6 +207,11 @@ const REPLY_INTENT_SYSTEM: Record<CustomerReplyIntent, string> = {
     "creates a save conflict so the latest version cannot be preserved. Politely " +
     "ask the customer to exit the editor and confirm once done. State the reason " +
     "(save conflict) in one short sentence.",
+  ask_homepage:
+    "CONTEXT: Before the technical team can request collaborator access to the " +
+    "customer's Shopify store, they need the customer's store homepage URL so " +
+    "they know which store to send the access request to. Politely ask the " +
+    "customer to share their store homepage link (e.g. https://yourstore.com).",
 };
 
 function buildReplyUserMessage(args: GenerateCustomerReplyArgs): string {

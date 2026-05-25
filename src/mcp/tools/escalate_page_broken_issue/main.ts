@@ -64,6 +64,7 @@ function registerEscalatePageBrokenIssueTool(server: McpServer): void {
         - ticket_url (optional) — Only include if your runtime exposes the live Crisp conversation URL.
         - crisp_session_id (optional but STRONGLY recommended).
         - customer_last_message_text (optional but STRONGLY recommended) — Verbatim copy of user's last text message. KHÔNG paraphrase, KHÔNG translate, KHÔNG fix typo.
+        - customer_homepage_url (optional URL) — Customer's Shopify store homepage. REQUIRED to be present when escalation needs store access; if missing the tool returns 'customer_homepage_url' in missing_info and Hugo must ask the customer.
         - user_exited_editor (required) — Boolean. Must be TRUE before the tool can escalate. The customer has explicitly confirmed they have exited the PageFly editor. Ask the customer first (see new STEP below) and pass false until they confirm.
 
         ===========================================================

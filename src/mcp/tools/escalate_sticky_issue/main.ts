@@ -64,6 +64,7 @@ function registerEscalateStickyIssueTool(server: McpServer): void {
         - ticket_url (optional)
         - crisp_session_id (optional but STRONGLY recommended)
         - customer_last_message_text (optional but STRONGLY recommended) — Verbatim user message.
+        - customer_homepage_url (optional URL) — Customer's Shopify store homepage. REQUIRED to be present when escalation needs store access; if missing the tool returns 'customer_homepage_url' in missing_info and Hugo must ask the customer.
 
         ===========================================================
         WHAT YOU MUST DO
@@ -96,6 +97,7 @@ function registerEscalateStickyIssueTool(server: McpServer): void {
         a) Call escalate_sticky_issue with: issue_description (English, mention CSS snippet already tried), editor_link, publish_status, user_exited_editor=true. If user pasted screenshot URLs include them in screenshot_urls. If user attached files directly in chat set customer_attached_files=true. ALWAYS include customer_last_message_text.
         b) Inspect the response:
            - If is_ready_for_escalation === false AND missing_info contains "editor_exit" → relay next_step_for_user verbatim. Wait for the customer to confirm they've exited, then call again with user_exited_editor=true.
+           - If is_ready_for_escalation === false AND missing_info contains "customer_homepage_url" → relay next_step_for_user verbatim (asks the customer for their store homepage URL). After the customer sends their homepage URL, call again with customer_homepage_url=that URL.
            - If is_ready_for_escalation === false AND missing_info contains "store_access" → relay next_step_for_user verbatim. Wait for the customer to confirm access has been granted, then call again.
            - If note_posted === true → reply with next_step_for_user verbatim.
            - If note_posted === false → reply with next_step_for_user. If you can post a Crisp private note natively, post crisp_note.content. note_post_error explains why.

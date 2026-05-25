@@ -51,6 +51,14 @@ const ESCALATE_PAGE_BROKEN_INPUT_SHAPE = z.object({
       "Verbatim text of the user's LAST message. KHÔNG paraphrase, KHÔNG trim, KHÔNG fix typo, KHÔNG translate. Used for hybrid session matching and for generating the customer-facing reply in their language."
     ),
 
+  customer_homepage_url: z
+    .string()
+    .url()
+    .optional()
+    .describe(
+      "OPTIONAL — the customer's Shopify store homepage URL (e.g. https://yourstore.com). REQUIRED to be present when store access has not yet been granted, so the technical team's access-request note can reference the exact store. If you do not have it yet, Hugo MUST ask the customer first; the tool will surface 'customer_homepage_url' in missing_info if it is missing."
+    ),
+
   user_exited_editor: z
     .boolean()
     .describe(
