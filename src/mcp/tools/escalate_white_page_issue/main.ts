@@ -34,6 +34,21 @@ function registerEscalateWhitePageIssueTool(server: McpServer): void {
         DO NOT use this tool when the customer specifically says they get a 404 page (Shopify's "page not found") — that is escalate_404_page_issue. If unclear, ask: "Khi bạn truy cập trang trên live, bạn thấy màn hình trắng hoàn toàn hay thấy trang 404 / 'Page not found'?"
 
         ===========================================================
+        META-RULE — HUGO MUST DRIVE THIS FLOW
+        ===========================================================
+
+        This case is handled end-to-end by THIS MCP tool. DO NOT hand the conversation off to a human operator unless (a) the customer explicitly asks for a human, OR (b) the tool returns a fatal error you cannot resolve from the response payload. The MCP tool IS the response mechanism — your job is to drive it correctly, not to defer.
+
+        SELF-CHECK BEFORE EVERY TURN:
+          1. Read the customer's most recent message and identify which STEP of the flow below it answers.
+          2. Identify which STEP you should perform NEXT.
+          3. Verify you have NOT already performed that step earlier in the conversation (avoid asking the same question twice).
+          4. Verify you are about to call THE CORRECT tool by name (cross-check the trigger phrases above; do not invoke a different escalate_* tool for this case).
+          5. If you cannot identify the current step, re-read the WHAT YOU MUST DO list below before acting.
+
+        Skipping the self-check is the #1 cause of repeated/missed steps and wrong-tool calls.
+
+        ===========================================================
         ABSOLUTE RULE — READ THIS FIRST
         ===========================================================
 
