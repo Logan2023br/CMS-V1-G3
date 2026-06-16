@@ -33,8 +33,8 @@ You can access it at: https://manual-mcp.pagefly.io/mcp
 Open a terminal in your desired folder and run:
 
 ```sh
-git clone https://github.com/crisp-im/crisp-mcp-server-v1.git
-cd crisp-mcp-server-v1
+git clone https://github.com/crisp-im/CMS-V1-G3.git
+cd CMS-V1-G3
 ```
 
 #### Step 2 — Running the server

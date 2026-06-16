@@ -14,16 +14,15 @@ import { registerTools } from "@/mcp/tools/index.js";
 function createMcpServer(): McpServer {
   const server = new McpServer(
     {
-      name    : "crisp-mcp-server-v1",
+      name    : "CMS-V1-G3",
       version : "1.0.0",
     },
     {
       instructions: `
-        This server exposes tools to escalate common PageFly issues to the technical team, plus store-data and diagnostic helpers. Use it to:
-        - Escalate any PageFly issue via the matching escalate_* tool (section, page broken, animation, horizontal scroll, theme override, page speed, fonts, sticky, popups, forms, badges, A/B testing, GTM/analytics, API, and many more — 61 categories in total). Each escalate_* tool gathers the required context (store access, editor link, publish consent) and posts an escalation note for the technical team.
+        This server exposes tools to escalate common PageFly issues to the technical team. Use it to:
+        - Escalate a PageFly issue via the matching escalate_* tool (redirect checkout, popup error, variant media, event button, form, duplicate widget, remove space, app error position, schema PageFly, broken animation, JS PageFly, video not auto, element not show, background mobile, product not assign). Each escalate_* tool gathers the required context (store access, editor link, publish consent) and posts an escalation note for the technical team.
         - Relay an ADDITIONAL request on an already-open case via submit_additional_request.
         - Handle a FOLLOW-UP on an existing issue (progress / not-fixed / acknowledgement) via handle_issue_followup.
-        - Diagnose page-size and font issues via the diagnose_* tools, and read store data via get_user / get_product / get_order.
 
         Each tool gathers the required context (store access, editor link) and posts an escalation note for the technical team.
 

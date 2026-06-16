@@ -107,7 +107,7 @@ app.post("/webhooks/crisp", (req, res) => {
 });
 
 // Starting the server
-const port = Number.parseInt(process.env.PORT ?? "3000", 10);
+const port = Number.parseInt(process.env.PORT ?? "4003", 10);
 
 app.listen(port, () => {
   console.log(`Demo MCP Server running on http://localhost:${port}/mcp`);

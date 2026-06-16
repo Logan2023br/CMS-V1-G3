@@ -49,7 +49,7 @@ Open `package.json`. The `dependencies` section must now include `"@anthropic-ai
 
 - [ ] **Step 3: Add the new env keys to `.env`**
 
-Append at the end of `.env` (worktree path: `/Users/bbuser/crisp-mcp-server-v1/.worktrees/scroll-session-match/.env`):
+Append at the end of `.env` (worktree path: `/Users/bbuser/CMS-V1-G3/.worktrees/scroll-session-match/.env`):
 
 ```
 # Crisp webhook signing secret (Settings → Plugins → Webhook on app.crisp.chat)

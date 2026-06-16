@@ -1,5 +1,5 @@
 {
-  "name": "crisp-mcp-server-v1",
+  "name": "CMS-V1-G3",
   "version": "1.0.0",
   "description": "Example of MCP integration with Hugo AI",
   "license": "ISC",
@@ -12,7 +12,7 @@
     "build": "tsc --build tsconfig.json && tsc-alias -p tsconfig.json",
     "start": "node --env-file=.env dist/src/server.js",
     "dev": "tsx watch --env-file=.env src/server.ts",
-    "tunnel": "cloudflared tunnel --url http://localhost:${PORT:-3000}"
+    "tunnel": "cloudflared tunnel --url http://localhost:${PORT:-4003}"
   },
   "devDependencies": {
     "@flydotio/dockerfile": "^0.7.10",
