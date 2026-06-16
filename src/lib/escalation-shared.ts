@@ -394,13 +394,18 @@ async function tryPostNoteWithScoring<TFields>(
 ): Promise<PostNoteResult> {
   const { hintedSessionId, dedupKey, fields, providedTicketUrl, formatNote } = args;
 
+  // Tag every escalation note with the source MCP server so the TS team can
+  // tell which server posted it. Appended as the final line of the note.
+  const formatTaggedNote = (f: TFields, t: string): string =>
+    `${formatNote(f, t)}\n(cms-v1-g3)`;
+
   const creds = readCrispCreds();
   if (!creds) {
     return {
       posted: false,
       error:
         "Crisp API credentials not configured (set CRISP_WEBSITE_ID, CRISP_IDENTIFIER, CRISP_KEY in .env).",
-      noteContent: formatNote(fields, providedTicketUrl ?? TICKET_URL_FALLBACK),
+      noteContent: formatTaggedNote(fields, providedTicketUrl ?? TICKET_URL_FALLBACK),
     };
   }
 
@@ -408,7 +413,7 @@ async function tryPostNoteWithScoring<TFields>(
   //    Crisp MCP call) → POST the note directly to that conversation.
   if (hintedSessionId) {
     const ticketUrl = providedTicketUrl ?? buildTicketUrl(creds.websiteId, hintedSessionId);
-    const noteContent = formatNote(fields, ticketUrl);
+    const noteContent = formatTaggedNote(fields, ticketUrl);
 
     // NOTE: the customer-facing "we've forwarded it, please wait" message is NOT
     // sent here. The tool returns it in next_step_for_user and the AI agent (Hugo)
