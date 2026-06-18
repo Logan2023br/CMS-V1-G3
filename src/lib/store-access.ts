@@ -17,6 +17,8 @@ import {
   setStoreAccessMeta,
   type CrispCreds,
 } from "@/lib/crisp.js";
+import { tsForShift } from "@/lib/roster.js";
+import type { TsMember } from "@/data/ts-roster.js";
 
 /**************************************************************************
  * CONSTANTS — customer-facing wait messages (when access pending)
@@ -31,37 +33,40 @@ const ACCESS_PENDING_WAIT_EN =
 /**************************************************************************
  * CONSTANTS — TS-facing note when posting the access request
  *
- * Always English. The Crisp operator @Logan is mentioned via Crisp's
- * `mentions` API field (operator UUID) so the assignee receives an email
- * notification — the textual "@Logan" in content is for human readers.
+ * Always English. The on-duty TS (resolved from the shift roster by the
+ * message time) is mentioned via Crisp's `mentions` API field (operator UUID)
+ * so they receive a notification — the textual "@Name" in content is for human
+ * readers.
  ***************************************************************************/
 
-const LOGAN_OPERATOR_ID = "11c92319-89c1-42be-b4da-2bf5e40568c3";
-
-// Marker appended to the @Logan note so later calls know access was already
-// requested (so we do not re-post @Logan on every customer message).
+// Marker appended to the access-request note so later calls know access was
+// already requested (so we do not re-post on every customer message).
 const ACCESS_REQUEST_MARKER = "[access-requested]";
 
-const AT_LOGAN_REQUIRED_PERMISSIONS =
+const ACCESS_REQUIRED_PERMISSIONS =
   "Home, Products, Customers, Discounts, Content, Online Store, " +
   "App Development, Store settings, Manage and install apps and channels";
 
-function buildAtLoganNoteContent(homepageUrl: string): string {
+// Human-readable note body, addressed to the on-duty TS by name.
+function buildAccessRequestNote(tsName: string, homepageUrl: string): string {
   return (
-    "@Logan please request collaborator access to this store.\n" +
+    `@${tsName} please request collaborator access to this store.\n` +
     `Homepage: ${homepageUrl}\n` +
-    `Required permissions: ${AT_LOGAN_REQUIRED_PERMISSIONS}`
+    `Required permissions: ${ACCESS_REQUIRED_PERMISSIONS}`
   );
 }
 
-/**
- * @deprecated — kept for backward compat with existing tests/imports. Use
- * buildAtLoganNoteContent(homepageUrl) instead; this constant has no
- * homepage URL and is not used by the runtime gate.
- */
-const AT_LOGAN_NOTE_CONTENT =
-  "@Logan please request collaborator access to this store.\n" +
-  `Required permissions: ${AT_LOGAN_REQUIRED_PERMISSIONS}`;
+// Full note (with the dedup marker) + the operator id(s) to mention, for the
+// TS on duty at the moment the request is posted.
+function buildAccessRequest(
+  onDutyTs: TsMember,
+  homepageUrl: string
+): { content: string; mentions: string[] } {
+  return {
+    content: `${buildAccessRequestNote(onDutyTs.name, homepageUrl)}\n${ACCESS_REQUEST_MARKER}`,
+    mentions: [onDutyTs.crispId],
+  };
+}
 
 /**************************************************************************
  * CONSTANTS — customer-facing access instructions after TS grants access
@@ -121,7 +126,7 @@ async function pickAccessPendingWaitMessage(
  * ASK-HOMEPAGE MESSAGE PICKER
  *
  * Used when access is pending AND we don't yet have the customer's store
- * homepage URL. Asks the customer to share their homepage so the @Logan
+ * homepage URL. Asks the customer to share their homepage so the on-duty TS
  * note can name the exact store.
  ***************************************************************************/
 
@@ -235,7 +240,7 @@ async function requireStoreAccess(
     return { ready: true };
   }
 
-  // 1b) store_access empty. If we ALREADY posted the @Logan request, do not
+  // 1b) store_access empty. If we ALREADY posted the access request, do not
   // re-post it. Instead, check whether the customer has now confirmed they
   // accepted the access — if so, persist store_access and proceed.
   const msgs = await fetchConversationMessages(sessionId, creds);
@@ -264,7 +269,7 @@ async function requireStoreAccess(
       return { ready: true };
     }
 
-    // Not confirmed yet → re-send the wait message, do NOT re-post @Logan.
+    // Not confirmed yet → re-send the wait message, do NOT re-post the access request.
     return {
       ready: false,
       output: {
@@ -279,8 +284,8 @@ async function requireStoreAccess(
     };
   }
 
-  // 2) First time (no @Logan posted yet). Before posting the @Logan note, ensure we have
-  // the customer's homepage URL — Logan needs to know which store to send
+  // 2) First time (no access request posted yet). Before posting the access-request note, ensure we have
+  // the customer's homepage URL — the TS needs to know which store to send
   // the access request to. If not provided, ask the customer first.
   if (mustAskHomepage(customerHomepageUrl, homepageProvidedByCustomer)) {
     return {
@@ -295,9 +300,9 @@ async function requireStoreAccess(
     };
   }
 
-  // 3) Have homepage URL → post @Logan note (English, with mentions) and
-  // return access-pending wait message to the customer.
-  return requestAccessViaLogan(
+  // 3) Have homepage URL → post the access-request note (English, mentioning the
+  // TS on duty NOW) and return the access-pending wait message to the customer.
+  return requestAccessFromOnDutyTs(
     sessionId,
     creds,
     customerLastMessageText,
@@ -306,17 +311,17 @@ async function requireStoreAccess(
   );
 }
 
-async function requestAccessViaLogan(
+async function requestAccessFromOnDutyTs(
   sessionId: string,
   creds: CrispCreds,
   customerLastMessageText: string | undefined,
   customerHomepageUrl: string,
   metaError?: string
 ): Promise<AccessCheckResult> {
-  const noteContent = `${buildAtLoganNoteContent(customerHomepageUrl)}\n${ACCESS_REQUEST_MARKER}`;
-  const post = await postCrispPrivateNote(sessionId, noteContent, creds, [
-    LOGAN_OPERATOR_ID,
-  ]);
+  // Who is on shift right now (Vietnam time) → mention them, not a fixed person.
+  const onDutyTs = tsForShift(Date.now());
+  const { content, mentions } = buildAccessRequest(onDutyTs, customerHomepageUrl);
+  const post = await postCrispPrivateNote(sessionId, content, creds, mentions);
   const errors: string[] = [];
   if (metaError) errors.push(`meta: ${metaError}`);
   if (!post.ok && post.error) errors.push(`note: ${post.error}`);
@@ -343,11 +348,10 @@ export {
   ACCESS_PENDING_WAIT_EN,
   ASK_HOMEPAGE_VI,
   ASK_HOMEPAGE_EN,
-  AT_LOGAN_NOTE_CONTENT,
-  AT_LOGAN_REQUIRED_PERMISSIONS,
-  LOGAN_OPERATOR_ID,
+  ACCESS_REQUIRED_PERMISSIONS,
   ACCESS_REQUEST_MARKER,
-  buildAtLoganNoteContent,
+  buildAccessRequestNote,
+  buildAccessRequest,
   ENGLISH_ACCESS_INSTRUCTIONS,
   ACCESS_ACK_PREFIX,
   hasStoreAccess,

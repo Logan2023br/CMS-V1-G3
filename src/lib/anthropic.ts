@@ -322,6 +322,58 @@ async function classifyFollowupKind(
 }
 
 /**************************************************************************
+ * FOLLOW-UP TARGET CLASSIFIER — is the customer following up on an issue that
+ * is ALREADY escalated (same_issue), or raising a NEW/different problem
+ * (new_issue)? Decides whether to reuse the old escalation note vs run intake.
+ ***************************************************************************/
+
+const FOLLOWUP_TARGET_SYSTEM_PROMPT =
+  `A customer is messaging on a conversation that already has one or more issues ` +
+  `escalated to the support/dev team. Those open issues are listed below. Decide ` +
+  `whether the customer's latest message is about an EXISTING listed issue or a ` +
+  `NEW, different one:\n` +
+  `- SAME_ISSUE: still about one of the listed issues — e.g. it is still broken, ` +
+  `was reported fixed but persists, or a status/answer on that same problem ` +
+  `(same symptom / page / feature).\n` +
+  `- NEW_ISSUE: a different problem from every listed issue (a different symptom, ` +
+  `page, or feature) that has not been escalated yet.\n\n` +
+  `If there are NO listed open issues, anything substantive is NEW_ISSUE.\n\n` +
+  `Base your decision MAINLY on the customer's LATEST message; judge by MEANING ` +
+  `and INTENT in ANY language — examples are illustrative ONLY. When unsure, ` +
+  `output SAME_ISSUE.\n\n` +
+  `Output ONLY one token: SAME_ISSUE or NEW_ISSUE.`;
+
+type FollowupTargetToken = "same_issue" | "new_issue";
+
+function buildFollowupTargetUserMessage(
+  customerMessages: string[],
+  openIssueDescriptions: string[]
+): string {
+  const issues = openIssueDescriptions.length === 0
+    ? "(none)"
+    : openIssueDescriptions.map((d, i) => `${i + 1}. ${JSON.stringify(d)}`).join("\n");
+  return `Open (already-escalated) issues:\n${issues}\n\n${buildCustomerMessagesBlock(customerMessages)}`;
+}
+
+function parseFollowupTargetResponse(rawText: string): FollowupTargetToken {
+  return rawText.trim().toUpperCase().startsWith("NEW_ISSUE") ? "new_issue" : "same_issue";
+}
+
+async function classifyFollowupTarget(
+  customerMessages: string[],
+  openIssueDescriptions: string[]
+): Promise<{ ok: boolean; target?: FollowupTargetToken; error?: string }> {
+  const result = await callClaude({
+    system: FOLLOWUP_TARGET_SYSTEM_PROMPT,
+    userMessage: buildFollowupTargetUserMessage(customerMessages, openIssueDescriptions),
+  });
+  if (!result.ok || !result.text) {
+    return { ok: false, error: result.error ?? "classifier returned no text" };
+  }
+  return { ok: true, target: parseFollowupTargetResponse(result.text) };
+}
+
+/**************************************************************************
  * URGENCY CLASSIFIER — is the customer URGENT/ANGRY or asking NORMALLY?
  ***************************************************************************/
 
@@ -663,6 +715,8 @@ export {
   type PublishConsent,
   classifyFollowupKind,
   parseFollowupKindResponse,
+  classifyFollowupTarget,
+  parseFollowupTargetResponse,
   classifyUrgency,
   parseUrgencyResponse,
   type FollowupKindToken,

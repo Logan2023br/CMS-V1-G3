@@ -5,7 +5,8 @@ import {
   pickAccessPendingWaitMessage,
   ACCESS_PENDING_WAIT_VI,
   ACCESS_PENDING_WAIT_EN,
-  AT_LOGAN_NOTE_CONTENT,
+  buildAccessRequestNote,
+  buildAccessRequest,
   ENGLISH_ACCESS_INSTRUCTIONS,
   matchAccessAcknowledged,
   mustAskHomepage,
@@ -61,10 +62,21 @@ test("pickAccessPendingWaitMessage: empty / undefined => EN fallback default", a
   assert.equal(await pickAccessPendingWaitMessage(undefined), ACCESS_PENDING_WAIT_EN);
 });
 
-test("AT_LOGAN_NOTE_CONTENT mentions Logan and the standard permissions list", () => {
-  assert.match(AT_LOGAN_NOTE_CONTENT, /@Logan/);
-  assert.match(AT_LOGAN_NOTE_CONTENT, /Home, Products, Customers/);
-  assert.match(AT_LOGAN_NOTE_CONTENT, /Manage and install apps and channels/);
+test("buildAccessRequestNote mentions the on-duty TS by name + the permissions, NOT Logan", () => {
+  const note = buildAccessRequestNote("Syed", "https://myshop.com");
+  assert.match(note, /@Syed/);
+  assert.match(note, /Homepage: https:\/\/myshop\.com/);
+  assert.match(note, /Home, Products, Customers/);
+  assert.match(note, /Manage and install apps and channels/);
+  assert.doesNotMatch(note, /@Logan/);
+});
+
+test("buildAccessRequest tags the on-duty TS's crispId and stamps the marker", () => {
+  const ts = { name: "Dan", crispId: "4d04b661-55a9-4763-8d94-ccb1613b980f" };
+  const { content, mentions } = buildAccessRequest(ts, "https://shop.io");
+  assert.deepEqual(mentions, ["4d04b661-55a9-4763-8d94-ccb1613b980f"]);
+  assert.match(content, /@Dan/);
+  assert.match(content, /\[access-requested\]/);
 });
 
 test("ENGLISH_ACCESS_INSTRUCTIONS contains the screenshot link", () => {

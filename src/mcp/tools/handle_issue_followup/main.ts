@@ -42,11 +42,15 @@ function registerHandleIssueFollowupTool(server: McpServer): void {
         WHAT IT DOES (decided automatically from the conversation):
           • Reads whether this is a DEV ticket (the conversation has the "dev" segment) or a
             regular TS ticket, the customer's intent (progress vs not-fixed), how urgent/angry
-            they are, and whether the TS shift has changed since the issue was last handled.
+            they are, whether the TS shift has changed since the issue was last handled, and
+            whether the message is about the SAME escalated issue or a NEW/different one.
+          • For a SAME-issue not-fixed report it re-notes/relays using the OLD escalation
+            note's details (it does NOT re-ask the customer for info already captured).
           • Then it routes: buy-time reassurance, hand off to a human, relay to the TS still
-            on shift, post a fresh note for the current shift's TS, or — when the customer
-            confirms ALL issues are fixed — a positive close (pings no one) — and returns the
-            exact customer message in next_step_for_user.
+            on shift, post a fresh note for the current shift's TS, tell you to run intake for
+            a NEW/different issue, or — when the customer confirms ALL issues are fixed — a
+            positive close (pings no one) — and returns the exact customer message (or empty)
+            in next_step_for_user.
 
         BEFORE CALLING: do NOT call this for a bare acknowledgement ("ok", "thanks") or a
         vague "I need more help" — first ASK the customer what they need / what is still
@@ -56,6 +60,11 @@ function registerHandleIssueFollowupTool(server: McpServer): void {
 
         OUTPUT HANDLING:
           • Reply to the customer with next_step_for_user VERBATIM.
+          • If action === "intake_new" (next_step_for_user is EMPTY), the customer raised a
+            NEW/different issue (not the one already escalated) → run your normal new-issue
+            intake: ask the case-specific required info (editor link, publish consent, exit-
+            editor, etc.) then escalate via submit_additional_request / the matching escalate_*
+            tool. Do not relay anything for this turn.
           • If action === "defer" (next_step_for_user is EMPTY), this was NOT a progress/not-
             fixed follow-up — handle the message with your normal rules instead.
           • Do not post anything to the team yourself; the tool does it.

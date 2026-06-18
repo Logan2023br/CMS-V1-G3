@@ -11,6 +11,7 @@ import {
   buildAccessGrantedPrompt,
   parseAccessGrantedResponse,
   parseFollowupKindResponse,
+  parseFollowupTargetResponse,
   parseUrgencyResponse,
   parseAnswerableResponse,
   parseIssueTypeResponse,
@@ -107,6 +108,14 @@ test("parseFollowupKindResponse: tokens map correctly", () => {
   assert.equal(parseFollowupKindResponse("ACKNOWLEDGEMENT"), "acknowledgement");
   assert.equal(parseFollowupKindResponse("OTHER"), "other");
   assert.equal(parseFollowupKindResponse("anything else"), "other");
+});
+
+test("parseFollowupTargetResponse: NEW_ISSUE => new_issue, else same_issue (default)", () => {
+  assert.equal(parseFollowupTargetResponse("NEW_ISSUE"), "new_issue");
+  assert.equal(parseFollowupTargetResponse("  new_issue  "), "new_issue");
+  assert.equal(parseFollowupTargetResponse("SAME_ISSUE"), "same_issue");
+  assert.equal(parseFollowupTargetResponse(""), "same_issue");
+  assert.equal(parseFollowupTargetResponse("anything else"), "same_issue");
 });
 
 test("parseUrgencyResponse: URGENT => true, else false", () => {

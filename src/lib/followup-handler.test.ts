@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {
   handleIssueFollowup,
   computeShiftChanged,
+  extractOpenIssueNames,
+  extractOldNoteBody,
+  buildRenoteDedupKey,
   NOTE_PREFIX_NEW_SHIFT,
   NOTE_PREFIX_DEV_RECHECK,
   type FollowupContext,
@@ -51,6 +54,55 @@ test("computeShiftChanged: no TS note → falls back to previous customer messag
 test("computeShiftChanged: not enough reference → false", () => {
   assert.equal(computeShiftChanged([userMsg(atGmt7(11, 0))], SELF), false);
   assert.equal(computeShiftChanged([], SELF), false);
+});
+
+test("buildRenoteDedupKey: same issue + same shift → same key (ignores prefix/case/trailing fields)", () => {
+  const a = buildRenoteDedupKey(`${NOTE_PREFIX_NEW_SHIFT}Issue: Syncing Not Working, editor: https://x`, "08-11");
+  const b = buildRenoteDedupKey("Issue: syncing not working, editor: https://y", "08-11");
+  assert.equal(a, b);
+});
+
+test("buildRenoteDedupKey: same issue, different shift → different key (a new shift may re-ping)", () => {
+  const a = buildRenoteDedupKey("Issue: syncing not working", "08-11");
+  const b = buildRenoteDedupKey("Issue: syncing not working", "11-14");
+  assert.notEqual(a, b);
+});
+
+function selfNote(tsMs: number, content: string): CrispMessage {
+  return { from: "operator", type: "note", content, timestamp: tsMs, user: { nickname: SELF } };
+}
+
+test("extractOpenIssueNames: reads plain 'Issue:' notes", () => {
+  const msgs = [selfNote(atGmt7(8), "Issue: cart not updating, editor: https://x")];
+  assert.deepEqual(extractOpenIssueNames(msgs, SELF), ["cart not updating"]);
+});
+
+test("extractOpenIssueNames: also reads [New shift…] / [Dev ticket…] prefixed notes", () => {
+  const msgs = [
+    selfNote(atGmt7(8), `${NOTE_PREFIX_NEW_SHIFT}Issue: syncing not working, editor: https://x`),
+    selfNote(atGmt7(9), `${NOTE_PREFIX_DEV_RECHECK}Issue: checkout broken, ticket: DEV-1`),
+  ];
+  assert.deepEqual(extractOpenIssueNames(msgs, SELF), ["syncing not working", "checkout broken"]);
+});
+
+test("extractOpenIssueNames: ignores other operators' notes", () => {
+  const msgs = [
+    { from: "operator", type: "note", content: "Issue: not ours", timestamp: atGmt7(8), user: { nickname: "Logan" } } as CrispMessage,
+  ];
+  assert.deepEqual(extractOpenIssueNames(msgs, SELF), []);
+});
+
+test("extractOldNoteBody: returns the latest escalation note body, stripping a follow-up prefix", () => {
+  const msgs = [
+    selfNote(atGmt7(8), "Issue: first thing, editor: https://a"),
+    selfNote(atGmt7(9), `${NOTE_PREFIX_NEW_SHIFT}Issue: latest thing, editor: https://b`),
+  ];
+  assert.equal(extractOldNoteBody(msgs, SELF), "Issue: latest thing, editor: https://b");
+});
+
+test("extractOldNoteBody: no escalation note → null", () => {
+  const msgs = [userMsg(atGmt7(8))];
+  assert.equal(extractOldNoteBody(msgs, SELF), null);
 });
 
 function makeDeps(
@@ -147,6 +199,66 @@ test("close_resolved: customer confirms ALL fixed → positive close, no ping", 
   assert.equal(out.action, "close_resolved");
   assert.equal(out.next_step_for_user, "CLOSE_RESOLVED_MSG");
   assert.equal(calls.relaySame.length + calls.noteForTeam.length, 0);
+});
+
+test("intake_new: new_issue + not_fixed → defer to intake, no posting", async () => {
+  const { deps, calls } = makeDeps({
+    isDev: true,
+    kind: "not_fixed",
+    urgent: false,
+    shiftChanged: false,
+    issueIdentity: "new_issue",
+  });
+  const out = await handleIssueFollowup("s", "a totally different problem", deps);
+  assert.equal(out.action, "intake_new");
+  assert.equal(out.next_step_for_user, "");
+  assert.equal(calls.relaySame.length + calls.noteForTeam.length, 0);
+});
+
+test("same_issue reuse: note_new_shift uses the OLD note body, not the raw summary", async () => {
+  const { deps, calls } = makeDeps({
+    isDev: false,
+    kind: "not_fixed",
+    urgent: false,
+    shiftChanged: true,
+    issueIdentity: "same_issue",
+    oldNoteBody: "Issue: PageFly editor not syncing to live, editor: https://x",
+  });
+  const out = await handleIssueFollowup("s", "freshly generated summary", deps);
+  assert.equal(out.action, "note_new_shift");
+  assert.equal(
+    calls.noteForTeam[0],
+    `${NOTE_PREFIX_NEW_SHIFT}Issue: PageFly editor not syncing to live, editor: https://x`
+  );
+});
+
+test("same_issue reuse: relay_same relays the OLD note body when present", async () => {
+  const { deps, calls } = makeDeps({
+    isDev: false,
+    kind: "not_fixed",
+    urgent: false,
+    shiftChanged: false,
+    oldNoteBody: "Issue: cart drawer not opening, editor: https://y",
+  });
+  const out = await handleIssueFollowup("s", "ignored summary", deps);
+  assert.equal(out.action, "relay_same");
+  assert.deepEqual(calls.relaySame, ["Issue: cart drawer not opening, editor: https://y"]);
+});
+
+test("same_issue reuse: renote_dev uses OLD dev note body", async () => {
+  const { deps, calls } = makeDeps({
+    isDev: true,
+    kind: "not_fixed",
+    urgent: false,
+    shiftChanged: false,
+    oldNoteBody: "Issue: checkout button broken, ticket: DEV-12",
+  });
+  const out = await handleIssueFollowup("s", "ignored", deps);
+  assert.equal(out.action, "renote_dev");
+  assert.equal(
+    calls.noteForTeam[0],
+    `${NOTE_PREFIX_DEV_RECHECK}Issue: checkout button broken, ticket: DEV-12`
+  );
 });
 
 test("defer: other kind → no action, empty next step", async () => {

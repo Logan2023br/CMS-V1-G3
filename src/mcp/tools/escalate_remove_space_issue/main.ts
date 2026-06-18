@@ -81,7 +81,7 @@ function registerEscalateRemoveSpaceIssueTool(server: McpServer): void {
         STORE ACCESS — AUTOMATICALLY HANDLED
         ===========================================================
 
-        Tool automatically checks Shopify store access. If access not granted → posts @Logan note + returns wait message in customer's language. Relay verbatim and call again after the customer confirms access granted.
+        Tool automatically checks Shopify store access. If access not granted → posts an access-request note (mentioning the on-duty TS) + returns wait message in customer's language. Relay verbatim and call again after the customer confirms access granted.
 
         ===========================================================
         INPUTS

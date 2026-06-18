@@ -11,16 +11,22 @@ import {
   decideFollowupAction,
   type FollowupAction,
   type FollowupKind,
+  type IssueIdentity,
 } from "@/lib/followup-routing.js";
 import {
   fetchConversationMessages,
   fetchConversationMeta,
   postCrispPrivateNote,
+  patchConversationData,
   type CrispCreds,
   type CrispMessage,
 } from "@/lib/crisp.js";
-import { classifyFollowupKind, classifyUrgency } from "@/lib/anthropic.js";
-import { sameShift } from "@/lib/shifts.js";
+import {
+  classifyFollowupKind,
+  classifyFollowupTarget,
+  classifyUrgency,
+} from "@/lib/anthropic.js";
+import { sameShift, shiftOf } from "@/lib/shifts.js";
 import { pickWaitMessage } from "@/lib/escalation-shared.js";
 import { relayAdditionalRequest, buildRelayDeps } from "@/lib/relay-additional-request.js";
 
@@ -30,6 +36,13 @@ interface FollowupContext {
   urgent: boolean;
   shiftChanged: boolean;
   openIssues: string[]; // names of escalated issues still being worked on
+  // Is the customer on the SAME escalated issue or a NEW one? Defaults to
+  // "same_issue" when omitted (back-compat).
+  issueIdentity?: IssueIdentity;
+  // Body of the matching OLD escalation note, reused verbatim for same-issue
+  // re-notes / relays so the current-shift TS has the details without the
+  // customer repeating them. null/absent → fall back to the request summary.
+  oldNoteBody?: string | null;
 }
 
 interface FollowupDeps {
@@ -83,7 +96,13 @@ async function handleIssueFollowup(
     kind: ctx.kind,
     urgent: ctx.urgent,
     shiftChanged: ctx.shiftChanged,
+    issueIdentity: ctx.issueIdentity,
   });
+
+  // Same-issue re-notes / relays reuse the OLD escalation note verbatim (so the
+  // current-shift TS has the details) and only fall back to the freshly generated
+  // summary when no matching old note was found.
+  const reuseBody = ctx.oldNoteBody ?? requestSummary;
 
   switch (action) {
     case "close_resolved":
@@ -96,16 +115,21 @@ async function handleIssueFollowup(
     case "transfer":
       return { action, next_step_for_user: deps.transferLine() };
 
+    case "intake_new":
+      // A NEW/different issue → let Hugo's normal intake (escalate_* /
+      // submit_additional_request) gather the case-specific info and escalate it.
+      return { action, next_step_for_user: "" };
+
     case "relay_same":
-      await deps.relaySame(sessionId, requestSummary);
+      await deps.relaySame(sessionId, reuseBody);
       return { action, next_step_for_user: await deps.reassureMessage() };
 
     case "note_new_shift":
-      await deps.noteForTeam(sessionId, `${NOTE_PREFIX_NEW_SHIFT}${requestSummary}`);
+      await deps.noteForTeam(sessionId, `${NOTE_PREFIX_NEW_SHIFT}${reuseBody}`);
       return { action, next_step_for_user: await deps.reassureMessage() };
 
     case "renote_dev":
-      await deps.noteForTeam(sessionId, `${NOTE_PREFIX_DEV_RECHECK}${requestSummary}`);
+      await deps.noteForTeam(sessionId, `${NOTE_PREFIX_DEV_RECHECK}${reuseBody}`);
       return { action, next_step_for_user: await deps.reassureMessage() };
 
     case "defer":
@@ -157,20 +181,68 @@ function computeShiftChanged(messages: CrispMessage[], selfNickname: string): bo
   return !sameShift(customerTs, handleTs);
 }
 
+// Matches the "Issue: <desc>" line of an escalation note, tolerating an optional
+// leading follow-up prefix like "[New shift — …] " or "[Dev ticket — …] ".
+const ISSUE_LINE_RE = /^\s*(?:\[[^\]]*\]\s*)?Issue:\s*([^\n]+)/i;
+
+function isOwnNote(m: CrispMessage, selfNickname: string): boolean {
+  return (
+    m.from === "operator" &&
+    m.type === "note" &&
+    (m.user?.nickname ?? "") === selfNickname
+  );
+}
+
 // Names of escalated issues, read from OUR escalation notes ("Issue: <desc>, ...").
-// Used to name the in-progress issue(s) when acknowledging the customer.
+// Used to name the in-progress issue(s) when acknowledging the customer. Also
+// reads notes carrying a follow-up prefix (re-notes for a new shift / dev recheck).
 function extractOpenIssueNames(messages: CrispMessage[], selfNickname: string): string[] {
   const names: string[] = [];
   for (const m of messages) {
-    if (m.from !== "operator" || m.type !== "note") continue;
-    if ((m.user?.nickname ?? "") !== selfNickname) continue; // only our own escalation notes
+    if (!isOwnNote(m, selfNickname)) continue; // only our own escalation notes
     const content = typeof m.content === "string" ? m.content : "";
-    const match = content.match(/^\s*Issue:\s*([^\n]+)/i);
+    const match = content.match(ISSUE_LINE_RE);
     if (!match) continue;
     const desc = match[1].split(/,\s*(?:reference|editor|ticket)\s*:/i)[0].trim();
     if (desc) names.push(desc);
   }
   return [...new Set(names)];
+}
+
+// Normalised issue description from a note body (drops follow-up prefix, the
+// trailing reference/editor/ticket fields, case and surrounding whitespace).
+function normalizeIssueText(noteBody: string): string {
+  const stripped = noteBody.replace(/^\s*\[[^\]]*\]\s*/, "");
+  const match = stripped.match(ISSUE_LINE_RE);
+  const desc = match ? match[1] : stripped;
+  return desc.split(/,\s*(?:reference|editor|ticket)\s*:/i)[0].trim().toLowerCase();
+}
+
+// Dedup key for a same-issue re-note: one note per (issue, shift). A genuinely
+// new follow-up in a LATER shift gets a different key, so the new shift's TS is
+// still pinged; rapid repeats within the same shift are suppressed.
+function buildRenoteDedupKey(noteBody: string, shiftLabel: string): string {
+  return `followup|${shiftLabel}|${normalizeIssueText(noteBody)}`;
+}
+
+// Body of the most recent escalation note WE posted, for verbatim reuse on a
+// same-issue re-note / relay. A leading follow-up prefix ("[New shift — …] ") is
+// stripped so re-notes do not stack prefixes. Returns null when none is found.
+function extractOldNoteBody(
+  messages: CrispMessage[],
+  selfNickname: string
+): string | null {
+  const sorted = [...messages]
+    .filter((m) => typeof m.timestamp === "number")
+    .sort((a, b) => (a.timestamp as number) - (b.timestamp as number));
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const m = sorted[i];
+    if (!isOwnNote(m, selfNickname)) continue;
+    const content = typeof m.content === "string" ? m.content : "";
+    const stripped = content.replace(/^\s*\[[^\]]*\]\s*/, "").trim();
+    if (ISSUE_LINE_RE.test(stripped)) return stripped;
+  }
+  return null;
 }
 
 function buildFollowupDeps(creds: CrispCreds, token: string): FollowupDeps {
@@ -194,8 +266,15 @@ function buildFollowupDeps(creds: CrispCreds, token: string): FollowupDeps {
       const selfNickname = process.env.CRISP_NOTE_USER_NICKNAME ?? "";
       const shiftChanged = computeShiftChanged(messages, selfNickname);
       const openIssues = extractOpenIssueNames(messages, selfNickname);
+      const oldNoteBody = extractOldNoteBody(messages, selfNickname);
 
-      return { isDev, kind, urgent, shiftChanged, openIssues };
+      // Same issue vs a new/different one (read & understand the conversation
+      // against the open issues). Default same_issue on classifier failure.
+      const targetRes = await classifyFollowupTarget(customerTexts, openIssues);
+      const issueIdentity =
+        targetRes.ok && targetRes.target ? targetRes.target : "same_issue";
+
+      return { isDev, kind, urgent, shiftChanged, openIssues, issueIdentity, oldNoteBody };
     },
 
     // Neutral, transfer-safe wait message (avoids words that trip Crisp's
@@ -224,15 +303,54 @@ function buildFollowupDeps(creds: CrispCreds, token: string): FollowupDeps {
     },
 
     noteForTeam: async (sessionId, summary) => {
-      await postCrispPrivateNote(sessionId, summary, creds);
+      // Dedup same-issue re-notes: one note per (issue, shift). Best-effort — a
+      // failed meta read does NOT block the note (better one extra note than a
+      // dropped escalation).
+      const selfNickname = process.env.CRISP_NOTE_USER_NICKNAME ?? "";
+      const { messages } = await fetchConversationMessages(sessionId, creds);
+      const { customerTs } = lastCustomerAndHandleTs(messages, selfNickname);
+      const shiftLabel = customerTs ? shiftOf(customerTs) : "unknown";
+      const dedupKey = buildRenoteDedupKey(summary, shiftLabel);
+
+      const { meta } = await fetchConversationMeta(sessionId, creds);
+      const data = readFollowupData(meta);
+      const refs = readFollowupRefs(data);
+      if (refs.includes(dedupKey)) return; // already noted this issue this shift
+
+      const r = await postCrispPrivateNote(sessionId, summary, creds);
+      if (r.ok) {
+        await patchConversationData(sessionId, creds, {
+          ...data,
+          followup_note_refs: [...refs, dedupKey].join("\n"),
+        });
+      }
     },
   };
+}
+
+// Dedup state for follow-up re-notes lives in the conversation custom data
+// (meta.data.data.followup_note_refs), separate from the escalate flow's
+// escalated_refs so the two never clobber each other.
+function readFollowupData(
+  meta: { data?: { data?: unknown } } | undefined
+): Record<string, unknown> {
+  const d = meta?.data?.data;
+  return d && typeof d === "object" ? (d as Record<string, unknown>) : {};
+}
+
+function readFollowupRefs(data: Record<string, unknown>): string[] {
+  const v = data.followup_note_refs;
+  if (typeof v !== "string") return [];
+  return v.split("\n").map((s) => s.trim()).filter(Boolean);
 }
 
 export {
   handleIssueFollowup,
   buildFollowupDeps,
   computeShiftChanged,
+  extractOpenIssueNames,
+  extractOldNoteBody,
+  buildRenoteDedupKey,
   lastCustomerAndHandleTs,
   TRANSFER_LINE,
   NOTE_PREFIX_NEW_SHIFT,

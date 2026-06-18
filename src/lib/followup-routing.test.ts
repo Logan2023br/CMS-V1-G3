@@ -70,3 +70,69 @@ test("other kind => defer to existing flows", () => {
   );
 });
 
+// --- issue identity: same_issue vs new_issue (2026-06-18 spec) ---
+
+test("new_issue + not_fixed (TS) => intake_new (ask info, escalate fresh)", () => {
+  assert.equal(
+    decideFollowupAction({
+      isDev: false,
+      kind: "not_fixed",
+      urgent: false,
+      shiftChanged: true,
+      issueIdentity: "new_issue",
+    }),
+    "intake_new"
+  );
+});
+
+test("new_issue + not_fixed (DEV) => intake_new (new issue triaged from scratch)", () => {
+  assert.equal(
+    decideFollowupAction({
+      isDev: true,
+      kind: "not_fixed",
+      urgent: false,
+      shiftChanged: false,
+      issueIdentity: "new_issue",
+    }),
+    "intake_new"
+  );
+});
+
+test("new_issue + other kind => intake_new (a brand-new problem to triage)", () => {
+  assert.equal(
+    decideFollowupAction({
+      isDev: false,
+      kind: "other",
+      urgent: false,
+      shiftChanged: false,
+      issueIdentity: "new_issue",
+    }),
+    "intake_new"
+  );
+});
+
+test("new_issue + progress => buy_time (status ping is about the existing issue)", () => {
+  assert.equal(
+    decideFollowupAction({
+      isDev: false,
+      kind: "progress",
+      urgent: false,
+      shiftChanged: false,
+      issueIdentity: "new_issue",
+    }),
+    "buy_time"
+  );
+});
+
+test("issueIdentity defaults to same_issue (back-compat) => existing routing", () => {
+  // Omitting issueIdentity must behave exactly as before this change.
+  assert.equal(
+    decideFollowupAction({ isDev: true, kind: "not_fixed", urgent: false, shiftChanged: false }),
+    "renote_dev"
+  );
+  assert.equal(
+    decideFollowupAction({ isDev: false, kind: "not_fixed", urgent: false, shiftChanged: true }),
+    "note_new_shift"
+  );
+});
+

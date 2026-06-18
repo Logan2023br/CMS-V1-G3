@@ -37,13 +37,13 @@ const HANDLE_ISSUE_FOLLOWUP_OUTPUT_SHAPE = z.object({
   action: z
     .string()
     .describe(
-      "Internal routing outcome: 'buy_time', 'transfer', 'relay_same', 'note_new_shift', 'renote_dev', or 'defer'."
+      "Internal routing outcome: 'buy_time', 'transfer', 'relay_same', 'note_new_shift', 'renote_dev', 'intake_new', 'ack_open', 'close_resolved', or 'defer'."
     ),
 
   next_step_for_user: z
     .string()
     .describe(
-      "Exact message Hugo should say to the customer next — relay VERBATIM. EMPTY when action is 'defer' (this was not a progress/not-fixed follow-up → handle it with your normal rules)."
+      "Exact message Hugo should say to the customer next — relay VERBATIM. EMPTY when action is 'defer' (not a progress/not-fixed follow-up → handle with normal rules) or 'intake_new' (a NEW/different issue → run normal new-issue intake then escalate)."
     ),
 
   error: z.string().optional(),
